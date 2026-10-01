@@ -664,7 +664,8 @@ td.dim { color: var(--muted); }
     if (Array.isArray(l)) lineup = l.filter((k) => pick(k)).slice(0, 5);
   } catch (e) { /* ignore */ }
   if (!lineup.length) loadTeamTop5(LATEST, T.team);
-  $("builder-season").value = LATEST;
+  fillSelect($("builder-season"), seasonItems(), LATEST);
+  fillSelect($("builder-team"), teamItems(LATEST), T.team);
 
   renderTeams();
   renderCompare();
