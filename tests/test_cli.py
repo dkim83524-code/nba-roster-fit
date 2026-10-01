@@ -59,3 +59,17 @@ def test_config_local_overlays_and_is_validated(tmp_path):
     (tmp_path / "config.local.yaml").write_text(yaml.safe_dump({"team": {"cap_moed": "x"}}))
     with pytest.raises(ValueError, match="unknown key"):
         load_config(tmp_path / "config.yaml")
+
+
+def test_explain_lists_ingredients(league):
+    from rosterfit.explain import format_table, ingredients
+
+    players = league.players["2025-26"]
+    minutes = league.minutes["regular"]["2025-26"]
+    table = ingredients(players, minutes, "DEM", "portability", league.cfg, top=5)
+    assert list(table.columns) == ["PLAYER_NAME", "MIN", "C&S 3s", "OREB%", "Screen AST", "Versatility",
+                                   "corner"]
+    assert len(table) == 5 and table["MIN"].is_monotonic_decreasing
+    assert table[["C&S 3s", "OREB%"]].stack().between(0, 100).all()
+    text = format_table(table, "title", league.cfg.portability.weights, "rank")
+    assert "weights: C&S 3s 0.25" in text and "scaling: rank" in text

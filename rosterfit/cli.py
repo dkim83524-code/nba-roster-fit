@@ -4,6 +4,7 @@
     python -m rosterfit check                       # what's cached, what's missing, DARKO matching
     python -m rosterfit plot --team NYK             # chart + CSV for one team, default season
     python -m rosterfit plot --team NYK --playoffs  # top-8 playoff rotation
+    python -m rosterfit explain --team NYK          # ingredients behind playmaking and portability
     python -m rosterfit demo                        # synthetic league, no network needed
     python -m rosterfit browser-script              # if fetch can't connect: download from your browser
 
@@ -243,6 +244,30 @@ def cmd_browser_script(cfg: Config, args) -> int:
     return 0
 
 
+def cmd_explain(cfg: Config, args) -> int:
+    from .explain import format_table, ingredients
+
+    season = args.season or cfg.seasons.target
+    league = build_league(cfg, _open_cache(cfg), [season])
+    if season not in league.players:
+        print(f"error: no cached data for {season}", file=sys.stderr)
+        return 2
+    team = args.team.upper()
+    minutes = league.minutes[REGULAR_MODE][season]
+    if team not in set(minutes["TEAM_ABBREVIATION"]):
+        print(f"error: no {season} minutes for {team}", file=sys.stderr)
+        return 2
+    n = int(league.players[season]["qualified"].sum())
+    corners = ["playmaking", "portability"] if args.corner == "both" else [args.corner]
+    for corner in corners:
+        table = ingredients(league.players[season], minutes, team, corner, cfg, args.top)
+        section = getattr(cfg, corner)
+        title = (f"\n{cfg.label(corner)} ({corner}) - {team} {season}: percentile on each ingredient "
+                 f"among {n} qualified players")
+        print(format_table(table, title, section.weights, section.component_scaling))
+    return 0
+
+
 def cmd_demo(cfg: Config, args) -> int:
     from .synthetic import make_league
 
@@ -283,6 +308,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--all", action="store_true", help="include tables that are already cached")
     p.add_argument("--out", help="where to write the script")
     p.set_defaults(func=cmd_browser_script)
+
+    p = sub.add_parser("explain", help="show the ingredients behind playmaking and portability for a team")
+    p.add_argument("--team", required=True)
+    p.add_argument("--season", help="default: seasons.target in config.yaml")
+    p.add_argument("--corner", choices=["playmaking", "portability", "both"], default="both")
+    p.add_argument("--top", type=int, default=10, help="how many players, by minutes")
+    p.set_defaults(func=cmd_explain)
 
     p = sub.add_parser("check", help="report cached tables, impact CSVs and the team pool")
     p.add_argument("--seasons")
