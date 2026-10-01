@@ -158,7 +158,7 @@
   }
 
   /* data.players[season] rows -> {season: Map(pid -> player)}. Row: pid, name, team, games, minutes,
-   * qualified, percentile per corner, z per corner, offensive role, defensive role. */
+   * qualified, percentile per corner, z per corner, offensive role, defensive role, position. */
   function playerIndex(data) {
     const nC = data.meta.corners.length;
     const out = {};
@@ -168,7 +168,7 @@
         map.set(r[0], {
           pid: r[0], season: s, name: r[1], team: r[2], gp: r[3], min: r[4], qualified: !!r[5],
           pct: r.slice(6, 6 + nC), z: r.slice(6 + nC, 6 + 2 * nC),
-          offRole: r[6 + 2 * nC] || null, defRole: r[7 + 2 * nC] || null,
+          offRole: r[6 + 2 * nC] || null, defRole: r[7 + 2 * nC] || null, pos: r[8 + 2 * nC] || null,
         });
       }
       out[s] = map;
@@ -181,7 +181,7 @@
     return pairs.map(([pid, min]) => {
       const p = index[season] ? index[season].get(pid) : null;
       return { pid, season, name: p ? p.name : String(pid), min, pct: p ? p.pct : blank, z: p ? p.z : blank,
-        offRole: p ? p.offRole : null, defRole: p ? p.defRole : null };
+        offRole: p ? p.offRole : null, defRole: p ? p.defRole : null, pos: p ? p.pos : null };
     });
   }
 
@@ -207,7 +207,7 @@
     const latest = data.meta.seasons[data.meta.seasons.length - 1];
     const entries = picks.map(({ season, pid }) => {
       const p = index[season].get(pid);
-      return { pid, season, name: p.name, min: 1, pct: p.pct, z: p.z, offRole: p.offRole, defRole: p.defRole };
+      return { pid, season, name: p.name, min: 1, pct: p.pct, z: p.z, offRole: p.offRole, defRole: p.defRole, pos: p.pos };
     });
     const ctx = teamContext(data, latest, "regular");
     return evaluate(entries, { ...ctx, drawAll: true, fixedWeight: 1, equalSize: true });
@@ -314,17 +314,19 @@
     return out;
   }
 
-  /* What to keep in hand per open spot: the most expensive of the teams' cheapest players. Every
-   * team has someone at or under it, so whichever team is dealt next, a signing is always possible. */
-  function signingFloor(salariesByTeam) {
-    let floor = 0;
-    for (const list of salariesByTeam) if (list.length) floor = Math.max(floor, Math.min(...list));
-    return floor;
+  /* What to keep in hand for one open spot: the lowest salary that `teams` different teams have
+   * someone at or under. With teams = 5, even after four teams are used up, one is left with a
+   * player you can afford (the deal only offers teams that have one). Fewer teams than that: the
+   * most expensive team's cheapest player. */
+  function signingFloor(salariesByTeam, teams) {
+    const mins = salariesByTeam.filter((l) => l.length).map((l) => Math.min(...l)).sort((a, b) => a - b);
+    if (!mins.length) return 0;
+    return mins[Math.min(Math.max(teams, 1), mins.length) - 1];
   }
 
-  /* A signing must leave the floor for every spot still open after it. */
-  function canAfford(salary, left, spotsAfter, floor) {
-    return salary + spotsAfter * floor <= left + 1e-6;
+  /* A signing must leave `reserve` in hand: the floors of the spots still open after it. */
+  function canAfford(salary, left, reserve) {
+    return salary + reserve <= left + 1e-6;
   }
 
   const api = {

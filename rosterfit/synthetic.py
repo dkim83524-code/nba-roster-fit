@@ -28,6 +28,7 @@ MPG = [35, 33, 31, 29, 26, 22, 18, 16, 15, 10, 8, 6, 4, 3]
 ROLES = {"creator": ("Shot Creator", "Point of Attack"), "scorer": ("Primary Ball Handler", "Chaser"),
          "wing3d": ("Movement Shooter", "Wing Stopper"), "big": ("Roll + Cut Big", "Anchor Big"),
          "connector": ("Connector", "Helper"), "bench": ("Stationary Shooter", "Low Activity")}
+POSITIONS = {"creator": "PG", "scorer": "SG", "wing3d": "SF", "connector": "PF", "big": "C"}
 _FIRST = ["Avery", "Blake", "Cam", "Dev", "Eli", "Finn", "Gray", "Hayes", "Ira", "Jules", "Kai",
           "Lane", "Milo", "Noel", "Oak", "Parker", "Quinn", "Reese", "Sage", "Tate"]
 _LAST = ["Alder", "Brook", "Cove", "Dale", "Ember", "Frost", "Glen", "Heath", "Isle", "Jett",
@@ -155,7 +156,9 @@ def make_league(root: Path, seasons: list[str], n_teams: int = 30, games: int = 
         roles = players["arche"].map(ROLES)
         pd.DataFrame({"nba_id": players["PLAYER_ID"], "Player": players["PLAYER_NAME"],
                       "Season": int(season[:4]) + 1,
-                      "Team": players["TEAM_ABBREVIATION"], "O-LEBRON": lo, "D-LEBRON": ld,
+                      "Team": players["TEAM_ABBREVIATION"],
+                      "Pos": [POSITIONS.get(a) or "PG SG SF PF C".split()[i % 5] for i, a in enumerate(players["arche"])],
+                      "O-LEBRON": lo, "D-LEBRON": ld,
                       "OffRole": roles.str[0], "DefRole": roles.str[1]})[keep] \
             .to_csv(lebron_dir / f"lebron-data-{int(season[:4]) + 1}.csv", index=False)
     return root / "cache", impact_dir

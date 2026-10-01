@@ -72,6 +72,7 @@ impact:                              # offense and defense corners: blends of pl
         season: ["season"]
         off_role: ["offrole", "off_role"]
         def_role: ["defrole", "def_role"]
+        position: ["pos", "position"]     # PG/SG/SF/PF/C: the cap game's position rounds
       numeric_season_is_end_year: true
       defense_higher_is_better: true
       name_overrides: {}
