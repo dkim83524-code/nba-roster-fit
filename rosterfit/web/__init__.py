@@ -31,6 +31,13 @@ def _num(x):
     return None if math.isnan(x) else x
 
 
+def _text(x):
+    """JSON-safe label: NaN/None/empty -> null."""
+    if x is None or (isinstance(x, float) and math.isnan(x)):
+        return None
+    return str(x) or None
+
+
 def _primary_teams(league: League, season: str) -> dict[int, str]:
     tm = league.minutes[REGULAR_MODE].get(season)
     if tm is None or tm.empty:
@@ -53,7 +60,8 @@ def build_web_data(league: League, cfg: Config, synthetic: bool = False,
             pid = int(r.PLAYER_ID)
             rows.append([pid, str(r.PLAYER_NAME), teams.get(pid, ""), int(r.GP), _num(r.MIN), int(bool(r.qualified))]
                         + [_num(getattr(r, f"{c}_pct")) for c in CORNERS]
-                        + [_num(getattr(r, f"{c}_z")) for c in CORNERS])
+                        + [_num(getattr(r, f"{c}_z")) for c in CORNERS]
+                        + [_text(getattr(r, "off_role", None)), _text(getattr(r, "def_role", None))])
         players[season] = rows
 
     teams: dict[str, dict] = {}
@@ -99,7 +107,11 @@ def build_web_data(league: League, cfg: Config, synthetic: bool = False,
             "rotation_size": cfg.playoffs.rotation_size,
             "min_gp": cfg.qualified.min_gp,
             "min_mpg": cfg.qualified.min_mpg,
-            "impact_source": cfg.impact.source_name,
+            "impact_source": " + ".join(cfg.impact.active_sources()),
+            "impact_sources": [{"name": n, "url": src.url,
+                                "offense": cfg.impact.weights_for("offense").get(n, 0),
+                                "defense": cfg.impact.weights_for("defense").get(n, 0)}
+                               for n, src in cfg.impact.sources().items() if n in cfg.impact.active_sources()],
         },
         "players": players,
         "teams": teams,

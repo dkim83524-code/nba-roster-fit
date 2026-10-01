@@ -32,7 +32,7 @@ from .config import CORNERS, Config
 from .metrics.players import (SeasonData, build_player_table, load_season, missing_tables,
                               team_minutes)
 from .metrics.pool import percentile_against
-from .sources.darko import ImpactReport, load_impact
+from .sources.darko import ImpactReport, load_impacts
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class League:
     minutes: dict[str, dict[str, pd.DataFrame]]  # mode -> season -> team minutes
     pool_seasons: list[str]
     incomplete: dict[str, list[str]]
-    impact_report: ImpactReport
+    impact_reports: dict[str, ImpactReport]  # source name -> what was read
     _raw_pools: dict[str, pd.DataFrame] = field(default_factory=dict)
 
     def teams(self, season: str, mode: str = REGULAR_MODE) -> list[str]:
@@ -125,20 +125,21 @@ def build_league(cfg: Config, cache: Cache, seasons: list[str]) -> League:
 
     rosters = {s: d.gamelog[["PLAYER_ID", "PLAYER_NAME"]].drop_duplicates("PLAYER_ID") for s, d in data.items()}
     ends = {s: d.regular_season_end for s, d in data.items()}
-    impact, report = load_impact(cfg, rosters, ends)
-    have_impact = set(impact["season"].unique())
-    for season in data:
-        if season not in have_impact:
-            incomplete.setdefault(season, []).append(f"{cfg.impact.source_name} CSV")
+    impacts, reports = load_impacts(cfg, rosters, ends)
+    for name, imp in impacts.items():  # every weighted source is needed, so each season means the same thing
+        have = set(imp["season"].unique())
+        for season in data:
+            if season not in have:
+                incomplete.setdefault(season, []).append(f"{name} CSV")
 
-    players = {s: build_player_table(d, impact, cfg) for s, d in data.items()}
+    players = {s: build_player_table(d, impacts, cfg) for s, d in data.items()}
     minutes = {
         REGULAR_MODE: {s: team_minutes(d.gamelog) for s, d in data.items()},
         PLAYOFF_MODE: {s: team_minutes(d.gamelog_playoffs) for s, d in data.items()},
     }
     window = set(cfg.window_seasons)
     pool_seasons = sorted(s for s in data if s in window and s not in incomplete)
-    return League(cfg, players, minutes, pool_seasons, incomplete, report)
+    return League(cfg, players, minutes, pool_seasons, incomplete, reports)
 
 
 # -- one roster ---------------------------------------------------------------------------------

@@ -23,13 +23,24 @@ corners:
     portability: "Fits next to stars"
     defense: "Stops"
   descriptions:
-    offense: "O-DPM (DARKO)"
+    offense: "O-LEBRON 80% + O-DARKO 20%"
     playmaking: "Potential AST + AST pts created / 100"
     portability: "C&S 3s, OREB%, screen AST, versatility"
-    defense: "D-DPM (DARKO)"
+    defense: "D-LEBRON 80% + D-DARKO 20%"
 
-impact:                              # offense and defense corners: halves of one plus-minus metric
+impact:                              # offense and defense corners: blends of plus-minus metrics
+  # Each source is z-scored within the season's qualified players, then averaged with these
+  # weights (the 2 : 0.5 ratio follows Crafted NBA's defensive blend). A player missing a source
+  # gets the average of the ones he has; a season missing a weighted source's CSV is left out of
+  # the team pool. A corner left out here uses the main source (source_name) alone.
+  weights:
+    offense: {LEBRON: 2.0, DARKO: 0.5}
+    defense: {LEBRON: 2.0, DARKO: 0.5}
+  min_weight_present: 0.2            # share of the weight a player needs (0.2 = DARKO alone is enough)
+
+  # The main source:
   source_name: "DARKO"
+  url: "https://www.darko.app"
   dir: "data/manual/darko"           # CSVs you download yourself from darko.app (no scraping)
   # Column aliases, matched after lower-casing and turning punctuation/spaces into "_".
   columns:
@@ -48,6 +59,22 @@ impact:                              # offense and defense corners: halves of on
     weights: [0.6, 0.3, 0.1]
   # For names `rosterfit check` reports as unmatched: "Name In The CSV": "Name On NBA.com" (or player id)
   name_overrides: {}
+
+  extra_sources:
+    LEBRON:                          # BBall Index's LEBRON database, saved with its CSV button
+      url: "https://www.bball-index.com/"
+      dir: "data/manual/lebron"      # one file per season, e.g. lebron-data-2026.csv (2026 = 2025-26)
+      columns:
+        player_id: ["nba_id"]
+        player_name: ["player"]
+        offense: ["o_lebron"]
+        defense: ["d_lebron"]
+        season: ["season"]
+        off_role: ["offrole", "off_role"]
+        def_role: ["defrole", "def_role"]
+      numeric_season_is_end_year: true
+      defense_higher_is_better: true
+      name_overrides: {}
 
 playmaking:                          # creating for teammates; self-scoring belongs in offense
   weights:                           # each component is z-scored within the qualified pool first

@@ -10,10 +10,15 @@ and a well-built roster fills the square without piling everyone into the same c
 
 | Corner (clockwise from top-left) | Label | Measure |
 |---|---|---|
-| Offense | Scores | O-DPM from DARKO |
+| Offense | Scores | O-LEBRON 80% + DARKO O-DPM 20% |
 | Playmaking | Sets up others | 50/50 blend of potential assists and assist points created, per 100 possessions (NBA.com passing tracking) |
 | Portability | Fits next to stars | Equal blend of catch-and-shoot 3-point proficiency, OREB%, screen assists per 100, and defensive versatility |
-| Defense | Stops | D-DPM from DARKO |
+| Defense | Stops | D-LEBRON 80% + DARKO D-DPM 20% |
+
+Offense and defense blend two plus-minus metrics. The 2 : 0.5 weights follow
+[Crafted NBA](https://craftednba.com)'s defensive blend, restricted to the sources we can download,
+and they live under `impact.weights` in `config.yaml`. LEBRON fixes DARKO's blind spot for on-ball
+defenders: Stephon Castle goes from the 5th to the 67th percentile in Stops for 2025-26.
 
 Every component is z-scored within the season's qualified pool (≥25 GP, ≥15 MPG). Each player
 gets a percentile per corner, and their vertex sits that far along the diagonal from the center
@@ -128,8 +133,14 @@ darko.app's leaderboard and save one file per season into `data/manual/darko/`, 
 - `rosterfit check` lists any names it couldn't match. Fix those with `impact.name_overrides`.
 - If DARKO's column names differ from the defaults, add them under `impact.columns`.
 
-Seasons without a DARKO file are left out of the team pool. With only `darko_2025-26.csv`, team
-percentiles compare against the 30 teams of that season only.
+**LEBRON CSVs, also by hand.** In BBall Index's LEBRON database, use the CSV button and save one
+file per season into `data/manual/lebron/`, e.g. `lebron-data-2026.csv` (LEBRON's season is the
+year it ends: 2026 means 2025-26). The files carry NBA.com ids, so no name matching is needed, and
+their offensive and defensive role labels show on the website.
+
+Seasons missing either file are left out of the team pool. With only the 2025-26 files, team
+percentiles compare against the 30 teams of that season only. `rosterfit explain --team DEN
+--corner defense` shows each player's LEBRON and DARKO pieces next to the blended Stops.
 
 **3. Check and plot**
 
@@ -184,7 +195,7 @@ cited with a link, which the page does.
 
 `rosterfit/web/core.js` repeats the team math for the browser, and `tests/test_web.py` checks it
 against `team.py` on every team in the synthetic league. The page and `roster-fit-data.json`
-contain NBA.com and DARKO numbers, so `outputs/` stays git-ignored: share the page privately, and
+contain NBA.com, DARKO and LEBRON numbers, so `outputs/` stays git-ignored: share the page privately, and
 don't commit it to this public repo.
 
 ## Configuration
@@ -209,10 +220,12 @@ impact:
   are paced at one per second and cached. Check NBA.com's terms of use yourself; this is meant for
   personal, non-commercial analysis.
 - **DARKO** ([darko.app](https://www.darko.app)): free, with CSV downloads on the site.
+- **LEBRON** ([BBall Index](https://www.bball-index.com/)): saved with the CSV button in its LEBRON
+  database, for personal use. Not redistributed here.
 - **Contracts** ([Basketball-Reference](https://www.basketball-reference.com/contracts/players.html)),
   for the website's cap game only: saved by hand from the site's export menu, cited with a link.
-- **Not used:** EPM (paid subscription and API tier) and LEBRON (free to view, but no bulk
-  download is offered). Third-party GitHub mirrors of LEBRON redistribute it without a license.
+- **Not used:** EPM (paid subscription and API tier), and third-party GitHub mirrors of LEBRON,
+  which redistribute it without a license.
 - Downloaded data is git-ignored. Don't commit it to a public repo.
 
 ## Package layout
@@ -222,7 +235,7 @@ rosterfit/
   config.py           load + validate config.yaml
   cache.py            parquet cache: data/cache/<season>/<regular|playoffs>/<table>.parquet
   sources/            nba_stats.py (nba_api), manual_nba.py (files saved from the browser),
-                      darko.py (your CSVs), formulas.py (Taylor's formulas),
+                      darko.py (your DARKO and LEBRON CSVs), formulas.py (Taylor's formulas),
                       contracts.py (Basketball-Reference contracts, for the cap game)
   metrics/            offense_defense, playmaking, portability, pool (z / percentiles), players
   team.py             weights, caps, redundancy, team percentiles, coverage, overlap

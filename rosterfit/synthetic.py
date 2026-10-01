@@ -24,6 +24,10 @@ ARCHETYPES = {
 TEMPLATE = ["creator", "scorer", "wing3d", "big", "connector", "wing3d", "big",
             "bench", "creator", "bench", "bench", "bench", "bench", "bench"]
 MPG = [35, 33, 31, 29, 26, 22, 18, 16, 15, 10, 8, 6, 4, 3]
+# LEBRON-style role labels for each archetype: (offensive role, defensive role)
+ROLES = {"creator": ("Shot Creator", "Point of Attack"), "scorer": ("Primary Ball Handler", "Chaser"),
+         "wing3d": ("Movement Shooter", "Wing Stopper"), "big": ("Roll + Cut Big", "Anchor Big"),
+         "connector": ("Connector", "Helper"), "bench": ("Stationary Shooter", "Low Activity")}
 _FIRST = ["Avery", "Blake", "Cam", "Dev", "Eli", "Finn", "Gray", "Hayes", "Ira", "Jules", "Kai",
           "Lane", "Milo", "Noel", "Oak", "Parker", "Quinn", "Reese", "Sage", "Tate"]
 _LAST = ["Alder", "Brook", "Cove", "Dale", "Ember", "Frost", "Glen", "Heath", "Isle", "Jett",
@@ -36,11 +40,14 @@ def _teams(n: int) -> list[str]:
 
 def make_league(root: Path, seasons: list[str], n_teams: int = 30, games: int = 82,
                 seed: int = 7) -> tuple[Path, Path]:
-    """Write a synthetic league. Returns (cache_dir, impact_dir)."""
+    """Write a synthetic league. Returns (cache_dir, impact_dir): DARKO-style CSVs in impact_dir and
+    LEBRON-style ones next to it in root/lebron (see use_synthetic_sources)."""
     rng = np.random.default_rng(seed)
     cache = Cache(root / "cache")
     impact_dir = root / "darko"
     impact_dir.mkdir(parents=True, exist_ok=True)
+    lebron_dir = root / "lebron"
+    lebron_dir.mkdir(parents=True, exist_ok=True)
     teams = _teams(n_teams)
     names = [f"{f} {l}" for f in _FIRST for l in _LAST]
     rng.shuffle(names)
@@ -58,6 +65,7 @@ def make_league(root: Path, seasons: list[str], n_teams: int = 30, games: int = 
                     "PLAYER_ID": pid, "PLAYER_NAME": names[(pid - 1000) % len(names)],
                     "TEAM_ID": 1610612700 + t_idx, "TEAM_ABBREVIATION": team,
                     "mpg": max(1.0, mpg + rng.normal(0, 2.0)), "traits": base, "quality": quality,
+                    "arche": arche,
                 })
                 pid += 1
         players = pd.DataFrame(rows_players)
@@ -137,7 +145,27 @@ def make_league(root: Path, seasons: list[str], n_teams: int = 30, games: int = 
         pd.DataFrame({"nba_id": players["PLAYER_ID"], "Player": players["PLAYER_NAME"],
                       "O-DPM": o.round(2), "D-DPM": d.round(2), "DPM": (o + d).round(2)}) \
             .to_csv(impact_dir / f"darko_{season}.csv", index=False)
+
+        # LEBRON-style CSV: its own noise (a separate generator, so the rest of the league doesn't
+        # change), the season as its end year, role labels, and only players with real minutes
+        lrng = np.random.default_rng(seed * 1000 + s_idx)
+        lo = 0.8 * tr[:, 0] + 0.9 * players["quality"] + lrng.normal(0, 0.35, len(players))
+        ld = 0.9 * tr[:, 1] + 0.3 * players["quality"] + lrng.normal(0, 0.35, len(players))
+        keep = (players["MIN"] >= 150).to_numpy()
+        roles = players["arche"].map(ROLES)
+        pd.DataFrame({"nba_id": players["PLAYER_ID"], "Player": players["PLAYER_NAME"],
+                      "Season": int(season[:4]) + 1,
+                      "Team": players["TEAM_ABBREVIATION"], "O-LEBRON": lo, "D-LEBRON": ld,
+                      "OffRole": roles.str[0], "DefRole": roles.str[1]})[keep] \
+            .to_csv(lebron_dir / f"lebron-data-{int(season[:4]) + 1}.csv", index=False)
     return root / "cache", impact_dir
+
+
+def use_synthetic_sources(cfg, impact_dir: Path) -> None:
+    """Point the config's impact sources at a synthetic league's CSVs (never at real downloads)."""
+    cfg.impact.dir = str(impact_dir)
+    for name, src in cfg.impact.extra_sources.items():
+        src.dir = str(Path(impact_dir).parent / name.lower())
 
 
 def make_contracts(data: dict, seed: int = 7) -> pd.DataFrame:

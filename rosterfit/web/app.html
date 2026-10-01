@@ -196,6 +196,7 @@ td.dim { color: var(--muted); }
 .cand .who { min-width: 0; }
 .cand .who b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cand .meta { font-size: 12.5px; color: var(--muted); }
+.cand .meta.role, .result .meta.role { display: block; color: var(--ink-2); }
 .cand .price { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cand .price b { font-weight: 600; }
 .cand .gain { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
@@ -479,9 +480,11 @@ td.dim { color: var(--muted); }
       table.onpointerleave = () => set(null);
     }
   }
+  const rolesOf = (p) => [p.offRole, p.defRole].filter(Boolean).join(" · ");
   function describePlayer(p) {
     const corners = ORDER.map((c) => `${M.labels[c]} ${fmtPct(p.pct[CIDX[c]])}`).join(" · ");
-    return `${p.name}: ${corners}`;
+    const roles = rolesOf(p);
+    return `${p.name}: ${corners}${roles ? ` (${roles})` : ""}`;
   }
 
   /* ---- numbers ---------------------------------------------------------------------------- */
@@ -646,7 +649,7 @@ td.dim { color: var(--muted); }
       const taken = lineup.includes(k);
       const corners = ORDER.map((c) => fmtPct(p.pct[CIDX[c]])).join(" / ");
       return `<li class="result"><span><b>${esc(p.name)}</b> <span class="meta">${esc(p.team)} ${esc(p.season)} · ${mins(p.min)} min</span><br>
-        <span class="meta pcts">${ORDER.map((c) => esc(short(c))).join(" / ")}: ${corners}</span></span>
+        <span class="meta pcts">${ORDER.map((c) => esc(short(c))).join(" / ")}: ${corners}</span>${rolesOf(p) ? `<br><span class="meta role">${esc(rolesOf(p))}</span>` : ""}</span>
         <button class="btn${taken || full ? "" : " primary"}" data-add="${esc(k)}" ${taken || full ? "disabled" : ""}>${taken ? "Added" : full ? "Full" : "Add"}</button></li>`;
     }).join("");
   }
@@ -755,7 +758,7 @@ td.dim { color: var(--muted); }
         const corners = ORDER.map((c) => `${short(c)} ${fmtPct(p.pct[CIDX[c]])}`).join(" · ");
         const moved = p.team && !p.team.split("/").includes(G.current) ? ` · ${yy(GAME.stats_season)} with ${esc(p.team)}` : "";
         return `<li class="cand${ok ? "" : " over"}">${glyph(p, players, round)}
-          <span class="who"><b>${esc(p.name)}</b><span class="meta">${corners}${moved}</span></span>
+          <span class="who"><b>${esc(p.name)}</b><span class="meta">${corners}${moved}</span>${rolesOf(p) ? `<span class="meta role">${esc(rolesOf(p))}</span>` : ""}</span>
           <span class="price"><b>${money(p.salary)}</b> <span class="meta">${Math.round(100 * p.salary / GAME.cap)}%</span>
             <span class="gain">+${(gain * 100).toFixed(1)} pts</span></span>
           <button class="btn${ok ? " primary" : ""}" data-sign="${p.pid}" ${ok ? "" : "disabled"}>${ok ? "Sign" : "Over"}</button></li>`;
@@ -897,8 +900,18 @@ td.dim { color: var(--muted); }
     ["Overlap", "Shape area that two or more players share. Big overlap means players doing the same job."],
     ["Surplus above cap", "In Sets up others and Fits next to stars, more stops counting once a team is in the top 20%. The extra is shown in players' worth."],
   ];
+  const SOURCES = M.impact_sources || [{ name: M.impact_source, url: "https://www.darko.app", offense: 1, defense: 1 }];
+  if (SOURCES.length > 1) {
+    const mix = (side) => SOURCES.filter((x) => x[side] > 0).map((x) => `${x.name} ${Math.round(100 * x[side] / SOURCES.reduce((t, y) => t + y[side], 0))}%`).join(" + ");
+    gloss.push(["Scores and Stops", `Blends of plus-minus metrics, each standardized among the season's qualified players: offense ${mix("offense")}, defense ${mix("defense")}. The weighting follows Crafted NBA's defensive blend.`]);
+  }
+  if ([...INDEX[LATEST].values()].some((p) => p.defRole)) {
+    gloss.push(["Roles", "Offensive and defensive role labels from BBall Index's LEBRON database, shown when you hover a player."]);
+  }
   $("glossary").innerHTML = gloss.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("");
-  $("sources").innerHTML = `Data: player stats from <a href="https://www.nba.com/stats" target="_blank" rel="noopener">NBA.com</a> via nba_api; offense and defense from <a href="https://www.darko.app" target="_blank" rel="noopener">DARKO</a>${GAME ? `; contracts from <a href="${esc(GAME.source_url)}" target="_blank" rel="noopener">${esc(GAME.source)}</a>` : ""}. Seasons ${esc(SEASONS[0])} to ${esc(LATEST)}, built ${esc(M.generated)}. A personal project, not affiliated with the NBA.`;
+  const srcLinks = SOURCES.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name === "LEBRON" ? "LEBRON (BBall Index)" : x.name)}</a>`).join(" and ");
+  const crafted = SOURCES.length > 1 ? `, blended as in <a href="https://craftednba.com" target="_blank" rel="noopener">Crafted NBA</a>'s defensive formula` : "";
+  $("sources").innerHTML = `Data: player stats from <a href="https://www.nba.com/stats" target="_blank" rel="noopener">NBA.com</a> via nba_api; offense and defense from ${srcLinks}${crafted}${GAME ? `; contracts from <a href="${esc(GAME.source_url)}" target="_blank" rel="noopener">${esc(GAME.source)}</a>` : ""}. Seasons ${esc(SEASONS[0])} to ${esc(LATEST)}, built ${esc(M.generated)}. A personal project, not affiliated with the NBA.`;
   $("brand-sub").textContent = `${SEASONS[0]} to ${LATEST}`;
   $("synthetic-notice").hidden = !M.synthetic;
 

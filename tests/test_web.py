@@ -21,9 +21,12 @@ def test_export_is_strict_json_with_the_expected_shape(data):
     assert len(text) > 10_000
     m = data["meta"]
     assert m["seasons"] == ["2023-24", "2024-25", "2025-26"]
+    assert [x["name"] for x in m["impact_sources"]] == ["DARKO", "LEBRON"]
+    assert m["impact_sources"][1]["defense"] == 2.0
     for season in m["seasons"]:
         row = data["players"][season][0]
-        assert len(row) == 6 + 2 * len(CORNERS)
+        assert len(row) == 8 + 2 * len(CORNERS)  # ... percentiles, z-scores, offensive role, defensive role
+        assert any(r[-1] for r in data["players"][season])
         assert data["teams"][season]["DEM"]["name"] == "Demo Team"
         po = data["teams"][season]["DEM"]["playoffs"]
         assert 0 < len(po) <= m["rotation_size"]

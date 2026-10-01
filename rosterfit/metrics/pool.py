@@ -78,4 +78,4 @@ def composite(components: pd.DataFrame, weights: dict[str, float], pool: pd.Seri
         num = num + (z.fillna(0.0) * w)
         den = den + (has * w)
     out = num / den.where(den > 0)
-    return out.where(den >= min_weight_present * total)
+    return out.where(den >= min_weight_present * total - 1e-9)  # tolerance: 0.2 x 3.0 > 0.6 in floats

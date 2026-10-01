@@ -157,7 +157,8 @@
     };
   }
 
-  /* data.players[season] rows -> {season: Map(pid -> player)} */
+  /* data.players[season] rows -> {season: Map(pid -> player)}. Row: pid, name, team, games, minutes,
+   * qualified, percentile per corner, z per corner, offensive role, defensive role. */
   function playerIndex(data) {
     const nC = data.meta.corners.length;
     const out = {};
@@ -167,6 +168,7 @@
         map.set(r[0], {
           pid: r[0], season: s, name: r[1], team: r[2], gp: r[3], min: r[4], qualified: !!r[5],
           pct: r.slice(6, 6 + nC), z: r.slice(6 + nC, 6 + 2 * nC),
+          offRole: r[6 + 2 * nC] || null, defRole: r[7 + 2 * nC] || null,
         });
       }
       out[s] = map;
@@ -178,7 +180,8 @@
     const blank = [null, null, null, null];
     return pairs.map(([pid, min]) => {
       const p = index[season] ? index[season].get(pid) : null;
-      return { pid, season, name: p ? p.name : String(pid), min, pct: p ? p.pct : blank, z: p ? p.z : blank };
+      return { pid, season, name: p ? p.name : String(pid), min, pct: p ? p.pct : blank, z: p ? p.z : blank,
+        offRole: p ? p.offRole : null, defRole: p ? p.defRole : null };
     });
   }
 
@@ -204,7 +207,7 @@
     const latest = data.meta.seasons[data.meta.seasons.length - 1];
     const entries = picks.map(({ season, pid }) => {
       const p = index[season].get(pid);
-      return { pid, season, name: p.name, min: 1, pct: p.pct, z: p.z };
+      return { pid, season, name: p.name, min: 1, pct: p.pct, z: p.z, offRole: p.offRole, defRole: p.defRole };
     });
     const ctx = teamContext(data, latest, "regular");
     return evaluate(entries, { ...ctx, drawAll: true, fixedWeight: 1, equalSize: true });

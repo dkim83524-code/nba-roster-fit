@@ -1,4 +1,5 @@
-"""Break a composite corner (playmaking, portability) into its ingredients for one team.
+"""Break a corner into its ingredients for one team: the stats behind playmaking and
+portability, or the plus-minus sources blended into offense and defense.
 
 Shows each player's percentile on every weighted ingredient, among the season's qualified
 players, next to the corner percentile those ingredients add up to.
@@ -7,7 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .config import Config
+from .config import IMPACT_CORNERS, Config
 from .metrics.playmaking import NEGATIVE as PM_NEGATIVE
 from .metrics.pool import percentile_against
 
@@ -21,14 +22,25 @@ LABELS = {
     "screen_ast_per100": "Screen AST",
     "versatility": "Versatility",
 }
-_SECTIONS = {"playmaking": ("pm_", PM_NEGATIVE), "portability": ("port_", ())}
+_SECTIONS = {"playmaking": ("pm_", PM_NEGATIVE), "portability": ("port_", ()),
+             "offense": ("offense_src_", ()), "defense": ("defense_src_", ())}
+
+
+def corner_weights(cfg: Config, corner: str) -> dict[str, float]:
+    if corner in IMPACT_CORNERS:
+        return cfg.impact.weights_for(corner)
+    return getattr(cfg, corner).weights
+
+
+def corner_scaling(cfg: Config, corner: str) -> str:
+    return "z" if corner in IMPACT_CORNERS else getattr(cfg, corner).component_scaling
 
 
 def ingredients(players: pd.DataFrame, team_minutes: pd.DataFrame, team: str, corner: str,
                 cfg: Config, top: int = 10) -> pd.DataFrame:
     prefix, negative = _SECTIONS[corner]
-    weights = getattr(cfg, corner).weights
-    active = [k for k, w in weights.items() if w > 0]
+    weights = corner_weights(cfg, corner)
+    active = [k for k, w in weights.items() if w > 0 and prefix + k in players]
     pool = players["qualified"]
     roster = (team_minutes[team_minutes["TEAM_ABBREVIATION"] == team]
               .nlargest(top, "MIN")[["PLAYER_ID", "MIN"]])

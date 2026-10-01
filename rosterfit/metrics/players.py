@@ -116,7 +116,10 @@ def team_minutes(gamelog: pd.DataFrame) -> pd.DataFrame:
              .reset_index())
 
 
-def build_player_table(data: SeasonData, impact: pd.DataFrame, cfg: Config) -> pd.DataFrame:
+def build_player_table(data: SeasonData, impact: dict[str, pd.DataFrame] | pd.DataFrame,
+                       cfg: Config) -> pd.DataFrame:
+    """impact: source name -> that source's table from sources.darko.load_impacts (or one table:
+    the main source)."""
     players = player_totals(data.gamelog)
     if data.advanced is not None and len(data.advanced):
         players["POSS"] = pick(players, data.advanced, "POSS")
@@ -125,7 +128,7 @@ def build_player_table(data: SeasonData, impact: pd.DataFrame, cfg: Config) -> p
     pool = qualified_mask(players["GP"], players["MPG"], cfg.qualified.min_gp, cfg.qualified.min_mpg)
     players["qualified"] = pool
 
-    od = offense_defense(players, impact, data.season)
+    od = offense_defense(players, impact, data.season, cfg, pool)
     pm = playmaking_components(players, data.passing)
     port = portability_components(
         players, data.advanced, data.catch_shoot, data.hustle, data.matchups,
@@ -144,6 +147,9 @@ def build_player_table(data: SeasonData, impact: pd.DataFrame, cfg: Config) -> p
         players[f"{corner}_raw"] = values
         players[f"{corner}_z"] = zscore(values, pool)
         players[f"{corner}_pct"] = percentile_against(values, values[pool])
+    for col in od.columns:
+        if col not in ("offense", "defense"):
+            players[col] = od[col]
     for name in pm.columns:
         players[f"pm_{name}"] = pm[name]
     for name in port.columns:
