@@ -133,7 +133,7 @@ def render(result: TeamResult, cfg: Config, out_path: str | Path, theme_name: st
     fig.text(0.03, 0.918,
              f"Player shapes: percentile among {result.qualified_n} qualified players "
              f"(≥{cfg.qualified.min_gp} GP, ≥{cfg.qualified.min_mpg:g} MPG); shape area ∝ minutes.  "
-             f"Team outline: percentile vs {result.pool_size} team-seasons "
+             f"Depth: team percentile vs {result.pool_size} team-seasons "
              f"({_season_span(result.pool_seasons)}).",
              fontsize=10.5, color=theme["ink2"], va="center")
     if result.synthetic:
@@ -149,11 +149,11 @@ def render(result: TeamResult, cfg: Config, out_path: str | Path, theme_name: st
     fig.text(x0, 0.865, "Coverage", fontsize=11, color=theme["ink2"])
     fig.text(x0, 0.80, f"{result.coverage * 100:.0f}%", fontsize=44, fontweight="bold",
              color=theme["ink"], va="center")
-    fig.text(x0, 0.748, "of the square filled by the team outline", fontsize=9, color=theme["ink2"])
+    fig.text(x0, 0.748, "of the square filled by the players' shapes", fontsize=9, color=theme["ink2"])
 
     share = result.overlap / result.sum_areas * 100 if result.sum_areas else 0.0
     tiles = [
-        ("Player shapes combined", f"{result.union * 100:.0f}%", "of the square"),
+        ("Depth", f"{result.depth * 100:.0f}%", "team outline: whole rotation"),
         ("Overlap", f"{result.overlap:.2f} sq", f"{share:.0f}% of all shape area is shared"),
     ]
     red = " · ".join(f"{labels[c]} +{result.redundancy_players[c]:.1f}"
@@ -171,7 +171,8 @@ def render(result: TeamResult, cfg: Config, out_path: str | Path, theme_name: st
              fontsize=8.5, color=theme["ink2"])
 
     # -- team corner percentiles ------------------------------------------------------------
-    fig.text(x0, 0.628, "Team corner percentiles", fontsize=10.5, color=theme["ink2"])
+    fig.text(x0, 0.628, f"Depth by corner: team percentile vs {result.pool_size} team-seasons", fontsize=10.5,
+             color=theme["ink2"])
     bx = fig.add_axes([x0, 0.505, 0.36, 0.115], facecolor=theme["surface"])
     bx.axis("off")
     bx.set_xlim(0, 1)
@@ -260,9 +261,10 @@ def draw_square(ax, result: TeamResult, cfg: Config, theme: dict, colored, other
         ax.add_patch(MplPolygon(p, closed=True, fc=c, ec="none", alpha=cfg.drawing.fill_alpha, zorder=3))
         ax.add_patch(MplPolygon(p, closed=True, fill=False, ec=c, lw=2, joinstyle="round", zorder=4))
 
-    team_pts = geometry.shape_points({c: result.pct[c] / 100 for c in CORNERS}, order)
-    ax.add_patch(MplPolygon(team_pts, closed=True, fill=False, ec=theme["ink"], lw=2.6,
-                            joinstyle="round", zorder=6))
+    if cfg.drawing.team_outline:
+        team_pts = geometry.shape_points({c: result.pct[c] / 100 for c in CORNERS}, order)
+        ax.add_patch(MplPolygon(team_pts, closed=True, fill=False, ec=theme["ink"], lw=2.6,
+                                joinstyle="round", zorder=6))
 
     candidates = []
     for _, row in colored.iterrows():
@@ -280,8 +282,9 @@ def draw_square(ax, result: TeamResult, cfg: Config, theme: dict, colored, other
     if not legend:
         return
     ly = -1.205
-    ax.plot([-1.0, -0.9], [ly, ly], color=theme["ink"], lw=2.6)
-    ax.text(-0.87, ly, "Team (vs all team-seasons)", va="center", fontsize=9.5, color=theme["ink"])
+    if cfg.drawing.team_outline:
+        ax.plot([-1.0, -0.9], [ly, ly], color=theme["ink"], lw=2.6)
+        ax.text(-0.87, ly, "Team depth (vs team-seasons)", va="center", fontsize=9.5, color=theme["ink"])
     ax.add_patch(MplPolygon([[-0.15, ly - 0.025], [-0.07, ly - 0.025], [-0.07, ly + 0.025], [-0.15, ly + 0.025]],
                             closed=True, fc=theme["series"][0], alpha=0.25, ec=theme["series"][0], lw=1.5))
     ax.text(-0.04, ly, "Player (vs league)", va="center", fontsize=9.5, color=theme["ink"])
@@ -358,7 +361,7 @@ def render_compare(a: TeamResult, b: TeamResult, cfg: Config, out_path: str | Pa
              fontweight="bold", color=theme["ink"], va="center")
     fig.text(0.03, 0.935,
              f"Player shapes: percentile among {a.qualified_n} qualified players; shape area ∝ minutes "
-             f"within each team.  Team outlines: percentile vs {a.pool_size} team-seasons "
+             f"within each team.  Depth: team percentile vs {a.pool_size} team-seasons "
              f"({_season_span(a.pool_seasons)}).",
              fontsize=10.5, color=theme["ink2"], va="center")
     if a.synthetic or b.synthetic:
@@ -378,11 +381,11 @@ def render_compare(a: TeamResult, b: TeamResult, cfg: Config, out_path: str | Pa
     xa, xb, xm = 0.462, 0.538, 0.5
     fig.text(xa, 0.86, a.team, ha="center", fontsize=12, fontweight="bold", color=theme["ink"])
     fig.text(xb, 0.86, b.team, ha="center", fontsize=12, fontweight="bold", color=theme["ink"])
-    fig.text(xm, 0.83, "Coverage", ha="center", fontsize=10.5, color=theme["ink2"])
+    fig.text(xm, 0.83, "Coverage (players' shapes)", ha="center", fontsize=10.5, color=theme["ink2"])
     for x, res in ((xa, a), (xb, b)):
         fig.text(x, 0.795, f"{res.coverage * 100:.0f}%", ha="center", va="center", fontsize=26,
                  fontweight="bold", color=theme["ink"])
-    rows = [("Player shapes combined", lambda r: f"{r.union * 100:.0f}%"),
+    rows = [("Depth (team outline)", lambda r: f"{r.depth * 100:.0f}%"),
             ("Overlap (squares)", lambda r: f"{r.overlap:.2f}")]
     rows += [(f"Redundancy: {labels[c]}", lambda r, c=c: f"+{r.redundancy_players.get(c, 0):.1f}")
              for c in cfg.team.capped_corners]
@@ -397,14 +400,16 @@ def render_compare(a: TeamResult, b: TeamResult, cfg: Config, out_path: str | Pa
     lg.axis("off")
     lg.set_xlim(0, 1)
     lg.set_ylim(0, 1)
-    lg.plot([0.0, 0.12], [0.75, 0.75], color=theme["ink"], lw=2.6)
-    lg.text(0.16, 0.75, "Team outline (vs team-seasons)", va="center", fontsize=8.5, color=theme["ink"])
+    if cfg.drawing.team_outline:
+        lg.plot([0.0, 0.12], [0.75, 0.75], color=theme["ink"], lw=2.6)
+        lg.text(0.16, 0.75, "Team depth outline (vs team-seasons)", va="center", fontsize=8.5,
+                color=theme["ink"])
     lg.add_patch(MplPolygon([[0.0, 0.12], [0.12, 0.12], [0.12, 0.38], [0.0, 0.38]], closed=True,
                             fc=theme["series"][0], alpha=0.25, ec=theme["series"][0], lw=1.2))
     lg.text(0.16, 0.25, "Player shape (vs league)", va="center", fontsize=8.5, color=theme["ink"])
 
     # -- corner-by-corner comparison --------------------------------------------------------------
-    fig.text(xm, 0.272, "Team corner percentiles", ha="center", fontsize=10.5, color=theme["ink2"])
+    fig.text(xm, 0.272, "Depth by corner (team percentile)", ha="center", fontsize=10.5, color=theme["ink2"])
     fig.text(xm, 0.25, f"● {a.team}    ○ {b.team}", ha="center", fontsize=10, color=theme["ink"])
     dx = fig.add_axes([0.415, 0.03, 0.17, 0.205], facecolor=theme["surface"])
     dx.axis("off")

@@ -54,12 +54,12 @@ def test_players_worth_mode(league):
     assert res.redundancy_players[c] == pytest.approx(res.redundancy[c] / one)
 
 
-def test_coverage_is_area_of_team_shape(league):
+def test_coverage_is_union_of_player_shapes_and_depth_is_team_outline(league):
     res = evaluate_team(league, "DEM", "2025-26")
     v = {c: res.pct[c] / 100 for c in CORNERS}
-    assert res.coverage == pytest.approx(geometry.area_fraction(v, league.cfg.corners.order))
-    assert 0 <= res.union <= 1
-    assert res.overlap == pytest.approx(res.sum_areas - res.union)
+    assert res.depth == pytest.approx(geometry.area_fraction(v, league.cfg.corners.order))
+    assert 0 <= res.coverage <= 1
+    assert res.overlap == pytest.approx(res.sum_areas - res.coverage)
 
 
 def test_minutes_leader_drawn_full_size(league):
@@ -87,7 +87,7 @@ def test_team_percentiles_in_range(league):
     for team in league.teams("2025-26"):
         res = evaluate_team(league, team, "2025-26")
         assert all(0 < res.pct[c] <= 100 for c in CORNERS)
-        assert not np.isnan(res.coverage)
+        assert not np.isnan(res.depth) and not np.isnan(res.coverage)
 
 
 def test_player_colors_match_between_regular_and_playoff_charts(league):

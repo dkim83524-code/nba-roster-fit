@@ -90,6 +90,7 @@ class PlayoffsCfg:
 class DrawingCfg:
     theme: str = "light"
     minutes_scaling: str = "area"
+    team_outline: bool = True
     min_minutes_to_draw: float = 100
     max_colored_players: int = 8
     fill_alpha: float = 0.16

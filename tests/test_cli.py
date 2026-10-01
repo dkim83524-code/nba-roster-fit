@@ -85,5 +85,12 @@ def test_compare_two_teams(league, tmp_path):
     b = evaluate_team(league, other, "2025-26")
     text = describe_compare(a, b, league.cfg)
     assert "Coverage" in text and f"{a.coverage * 100:.0f}%" in text and other in text
+    assert "Depth" in text and f"{a.depth * 100:.0f}%" in text
     out = render_compare(a, b, league.cfg, tmp_path / "cmp.png")
     assert out.stat().st_size > 50_000
+
+
+def test_no_outline_flag(tmp_path):
+    out = tmp_path / "demo.png"
+    assert main(["--config", str(ROOT / "config.yaml"), "demo", "--no-outline", "--out", str(out)]) == 0
+    assert out.exists()

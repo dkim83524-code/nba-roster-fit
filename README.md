@@ -47,10 +47,15 @@ Details on each component:
     worth = an 85th-percentile player at 34 MPG).
 - **Team corner percentile:** where the (capped) sum ranks among all team-seasons in the window
   (default 2017-18 to 2025-26, about 270 team-seasons).
-- **Coverage:** area of the team outline drawn from those four percentiles, as a share of the square.
-- **Player shapes combined / overlap:** each player's shape is scaled so its area is proportional
-  to minutes relative to the team's minutes leader. Overlap = sum of shape areas − area of their
-  union. It can exceed 1 square when many shapes stack.
+- **Coverage (the headline):** how much of the square the players' shapes fill together, i.e. does
+  *anyone* on the team cover each part of it. Each shape is scaled so its area is proportional to
+  minutes relative to the team's minutes leader.
+- **Depth (the black outline):** the area of the team outline drawn from the four team corner
+  percentiles: how much of each corner the *whole rotation* provides, minutes-weighted and
+  compared with history. A team with one elite defender and four weak ones has high coverage at
+  Stops but low depth there. Hide the outline with `--no-outline` or `drawing.team_outline: false`.
+- **Overlap:** sum of the shape areas − the area they cover together. It can exceed 1 square when
+  many shapes stack.
 - **Playoff mode** (`--playoffs`): the top 8 by playoff minutes, using regular-season metrics,
   compared against other playoff teams' top 8s.
 

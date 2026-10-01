@@ -163,10 +163,10 @@ def cmd_check(cfg: Config, args) -> int:
 def describe(result: TeamResult, cfg: Config) -> str:
     lines = [
         f"{result.team_name} ({result.team}) - {result.season} {result.mode}",
-        f"Coverage: {result.coverage * 100:.1f}% of the square "
+        f"Coverage: {result.coverage * 100:.1f}% of the square filled by the players' shapes; "
+        f"overlap {result.overlap:.2f} squares (sum of shape areas {result.sum_areas:.2f})",
+        f"Depth: {result.depth * 100:.1f}% of the square inside the team outline "
         f"(team outline vs {result.pool_size} team-seasons)",
-        f"Player shapes combined: {result.union * 100:.1f}% of the square; overlap {result.overlap:.2f} squares "
-        f"(sum of shape areas {result.sum_areas:.2f})",
     ]
     for c in cfg.team.capped_corners:
         lines.append(f"Redundancy, {cfg.label(c)}: +{result.redundancy_players[c]:.2f} players' worth "
@@ -270,8 +270,8 @@ def cmd_explain(cfg: Config, args) -> int:
 
 
 def describe_compare(a: TeamResult, b: TeamResult, cfg: Config) -> str:
-    rows = [("Coverage", lambda r: f"{r.coverage * 100:.0f}%"),
-            ("Player shapes combined", lambda r: f"{r.union * 100:.0f}%"),
+    rows = [("Coverage (players' shapes)", lambda r: f"{r.coverage * 100:.0f}%"),
+            ("Depth (team outline)", lambda r: f"{r.depth * 100:.0f}%"),
             ("Overlap (squares)", lambda r: f"{r.overlap:.2f}")]
     rows += [(f"Redundancy: {cfg.label(c)}", lambda r, c=c: f"+{r.redundancy_players.get(c, 0):.2f}")
              for c in cfg.team.capped_corners]
@@ -351,6 +351,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--season", help="default: seasons.target in config.yaml")
     p.add_argument("--playoffs", action="store_true", help="compare top playoff rotations")
     p.add_argument("--theme", choices=["light", "dark"])
+    p.add_argument("--no-outline", action="store_true", help="hide the team depth outlines")
     p.add_argument("--out", help="output PNG path (a CSV with the same name is written next to it)")
     p.set_defaults(func=cmd_compare)
 
@@ -375,6 +376,7 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--season", help="default: seasons.target in config.yaml")
         p.add_argument("--playoffs", action="store_true", help="top playoff rotation instead of full roster")
         p.add_argument("--theme", choices=["light", "dark"])
+        p.add_argument("--no-outline", action="store_true", help="hide the team depth outline")
         p.add_argument("--out", help="output PNG path (a CSV with the same name is written next to it)")
         p.set_defaults(func=func)
 
@@ -382,6 +384,8 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING,
                         format="%(levelname)s %(message)s")
     cfg = load_config(args.config)
+    if getattr(args, "no_outline", False):
+        cfg.drawing.team_outline = False
     return args.func(cfg, args)
 
 

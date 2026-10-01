@@ -91,6 +91,7 @@ playoffs:
 drawing:
   theme: "light"                     # light | dark
   minutes_scaling: "area"            # area: shape area proportional to minutes vs the team's leader; none
+  team_outline: true                 # draw the black team outline (depth); --no-outline hides it
   min_minutes_to_draw: 100
   max_colored_players: 8             # the rest are drawn in gray as "Other"
   fill_alpha: 0.16
