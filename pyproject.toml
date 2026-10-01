@@ -27,5 +27,8 @@ rosterfit = "rosterfit.cli:main"
 [tool.setuptools.packages.find]
 include = ["rosterfit*"]
 
+[tool.setuptools.package-data]
+rosterfit = ["web/*.html", "web/*.js"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

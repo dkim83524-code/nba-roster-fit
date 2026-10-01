@@ -7,6 +7,7 @@
     python -m rosterfit compare --team NYK --vs SAS --playoffs   # two teams side by side
     python -m rosterfit explain --team NYK          # ingredients behind playmaking and portability
     python -m rosterfit demo                        # synthetic league, no network needed
+    python -m rosterfit export-web                  # the website: one HTML page + its data file
     python -m rosterfit browser-script              # if fetch can't connect: download from your browser
 
 Files saved into data/manual/nba/ (NBA.com) and data/manual/darko/ (DARKO) are picked up by
@@ -305,14 +306,9 @@ def cmd_compare(cfg: Config, args) -> int:
 
 
 def cmd_demo(cfg: Config, args) -> int:
-    from .synthetic import make_league
-
-    seasons = ["2023-24", "2024-25", "2025-26"]
     with tempfile.TemporaryDirectory() as tmp:
-        cache_dir, impact_dir = make_league(Path(tmp), seasons)
-        cfg.impact.dir = str(impact_dir)
-        cfg.seasons.window = [seasons[0], seasons[-1]]
-        league = build_league(cfg, Cache(cache_dir), seasons)
+        league = _demo_league(cfg, Path(tmp))
+        seasons = sorted(league.players)
         mode = PLAYOFF_MODE if args.playoffs else REGULAR_MODE
         result = evaluate_team(league, "DEM", seasons[-1], mode)
         result.synthetic = True
@@ -320,6 +316,39 @@ def cmd_demo(cfg: Config, args) -> int:
         print(describe(result, cfg))
         out = Path(args.out) if args.out else cfg.path("outputs") / f"demo_{mode}.png"
         _render(result, cfg, out, args.theme)
+    return 0
+
+
+def _demo_league(cfg: Config, tmp: Path):
+    from .synthetic import make_league
+
+    seasons = ["2023-24", "2024-25", "2025-26"]
+    cache_dir, impact_dir = make_league(tmp, seasons)
+    cfg.impact.dir = str(impact_dir)
+    cfg.seasons.window = [seasons[0], seasons[-1]]
+    return build_league(cfg, Cache(cache_dir), seasons)
+
+
+def cmd_export_web(cfg: Config, args) -> int:
+    from .web import build_web_data, write_web
+
+    out_dir = Path(args.out) if args.out else cfg.path("outputs") / "web"
+    if args.demo:
+        with tempfile.TemporaryDirectory() as tmp:
+            league = _demo_league(cfg, Path(tmp))
+            names = {t: ("Demo Team" if t == "DEM" else f"Team {t[1:]}")
+                     for s in league.players for t in league.teams(s, REGULAR_MODE)}
+            data = build_web_data(league, cfg, synthetic=True, names=names)
+    else:
+        league = build_league(cfg, _open_cache(cfg), _seasons(cfg, args.seasons))
+        if league.incomplete:
+            print("warning: some seasons are incomplete; run `check` to see what's missing", file=sys.stderr)
+        data = build_web_data(league, cfg)
+    paths = write_web(data, out_dir)
+    n_teams = sum(len(t) for t in data["teams"].values())
+    print(f"{len(data['meta']['seasons'])} seasons, {n_teams} team-seasons")
+    print(f"Wrote {paths['page']}   (open in a browser)")
+    print(f"      {paths['data']}   (upload this to Claude to update the shared page)")
     return 0
 
 
@@ -361,6 +390,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--corner", choices=["playmaking", "portability", "both"], default="both")
     p.add_argument("--top", type=int, default=10, help="how many players, by minutes")
     p.set_defaults(func=cmd_explain)
+
+    p = sub.add_parser("export-web", help="write the Roster Fit website (one HTML page) and its data file")
+    p.add_argument("--seasons", help="'2017-18:2025-26' (default: the window + target)")
+    p.add_argument("--demo", action="store_true", help="made-up league, no downloads needed")
+    p.add_argument("--out", help="output folder (default: outputs/web)")
+    p.set_defaults(func=cmd_export_web)
 
     p = sub.add_parser("check", help="report cached tables, impact CSVs and the team pool")
     p.add_argument("--seasons")
