@@ -82,6 +82,33 @@ python -m rosterfit fetch           # 2017-18 to 2025-26: game logs, advanced, p
 This is about 60 requests at one per second (more if the matchup endpoint needs per-team calls).
 Everything is cached in `data/cache/` and never re-downloaded unless you pass `--refresh`.
 
+**If `fetch` can't connect, download from your browser instead.** NBA.com answers your browser
+even when it refuses Python. Generate a download script, paste it into the browser console on
+nba.com, and drop the files it saves into `data/manual/nba/`:
+
+```bash
+python -m rosterfit browser-script   # writes data/manual/nba/download_nba_stats.js (only what's missing)
+```
+
+1. Open https://www.nba.com/stats and open the console: Cmd+Option+J (Mac) or Ctrl+Shift+J
+   (Windows). Chrome may ask you to type `allow pasting` first.
+2. Paste the whole script and press Enter. Stay on the tab until it prints `Done`, and allow
+   multiple downloads if asked.
+3. Move the downloaded `nba_stats_<season>.json` files into `data/manual/nba/`.
+
+This is the route to use in GitHub Codespaces, where `fetch` stops right away because NBA.com
+ignores cloud servers. Your browser still runs on your own computer, so the script works. Upload
+the downloaded files by dragging them onto `data/manual/nba` in the Explorer panel.
+
+The script makes exactly the requests `fetch` would. Single responses saved by hand also work:
+in the Network tab, find the `stats.nba.com` request, use "Save response" or "Copy response", and
+save it as a `.json` file in `data/manual/nba/`. The importer recognizes which table and season
+each response is from (or name the file like `passing_2025-26.json`). Per-game downloads are
+converted back to season totals.
+
+Anything in `data/manual/nba/` is copied into the cache every time you run `check`, `plot` or
+`fetch`, so there's no separate import step.
+
 **2. DARKO CSVs. Download these by hand; nothing scrapes darko.app.** Use the CSV download on
 darko.app's leaderboard and save one file per season into `data/manual/darko/`, for example
 `darko_2025-26.csv`. A single history file with a season or date column also works.
@@ -126,13 +153,14 @@ Every weight, cap, threshold, corner order, label and season window lives in
 rosterfit/
   config.py           load + validate config.yaml
   cache.py            parquet cache: data/cache/<season>/<regular|playoffs>/<table>.parquet
-  sources/            nba_stats.py (nba_api), darko.py (your CSVs), formulas.py (Taylor's formulas)
+  sources/            nba_stats.py (nba_api), manual_nba.py (files saved from the browser),
+                      darko.py (your CSVs), formulas.py (Taylor's formulas)
   metrics/            offense_defense, playmaking, portability, pool (z / percentiles), players
   team.py             weights, caps, redundancy, team percentiles, coverage, overlap
   geometry.py         shapes, areas, union (shapely)
   plot.py             matplotlib chart
   synthetic.py        made-up league for the demo and tests
-  cli.py              fetch | check | plot | demo
+  cli.py              fetch | browser-script | check | plot | demo
 ```
 
 ## Next

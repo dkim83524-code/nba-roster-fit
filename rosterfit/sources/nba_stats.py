@@ -43,6 +43,42 @@ def available(table: str, season: str) -> bool:
     return at_least(season, TABLES[table].first_season)
 
 
+def team_ids() -> list[int]:
+    from nba_api.stats.static import teams
+    return [t["id"] for t in teams.get_teams()]
+
+
+def request_spec(table: str, season: str, season_type: str,
+                 def_team_id: int | None = None) -> tuple[Callable, dict]:
+    """The nba_api endpoint class and arguments for one table: the single definition of each request.
+
+    Used by the Python fetcher and by the browser download script, so both ask for the same thing.
+    """
+    from nba_api.stats import endpoints as ep
+
+    if table == "gamelog":
+        return ep.LeagueGameLog, dict(season=season, season_type_all_star=season_type,
+                                      player_or_team_abbreviation="P")
+    if table == "advanced":
+        return ep.LeagueDashPlayerStats, dict(season=season, season_type_all_star=season_type,
+                                              measure_type_detailed_defense="Advanced",
+                                              per_mode_detailed="Totals")
+    if table in ("passing", "catch_shoot"):
+        measure = {"passing": "Passing", "catch_shoot": "CatchShoot"}[table]
+        return ep.LeagueDashPtStats, dict(season=season, season_type_all_star=season_type,
+                                          pt_measure_type=measure, per_mode_simple="Totals",
+                                          player_or_team="Player")
+    if table == "hustle":
+        return ep.LeagueHustleStatsPlayer, dict(season=season, season_type_all_star=season_type,
+                                                per_mode_time="Totals")
+    if table == "matchups":
+        kwargs = dict(season=season, season_type_playoffs=season_type, per_mode_simple="Totals")
+        if def_team_id is not None:
+            kwargs["def_team_id_nullable"] = str(def_team_id)
+        return ep.MatchupsRollup, kwargs
+    raise KeyError(f"unknown table '{table}'")
+
+
 class NBAStatsFetcher:
     """Thin, polite wrapper around nba_api: one request at a time, a pause between, retries."""
 
@@ -75,33 +111,12 @@ class NBAStatsFetcher:
         ) from last_err
 
     # -- tables --------------------------------------------------------------------------
-    def _gamelog(self, season: str, season_type: str) -> pd.DataFrame:
-        from nba_api.stats.endpoints import LeagueGameLog
-        return self._call(LeagueGameLog, season=season, season_type_all_star=season_type,
-                          player_or_team_abbreviation="P")
-
-    def _advanced(self, season: str, season_type: str) -> pd.DataFrame:
-        from nba_api.stats.endpoints import LeagueDashPlayerStats
-        return self._call(LeagueDashPlayerStats, season=season, season_type_all_star=season_type,
-                          measure_type_detailed_defense="Advanced", per_mode_detailed="Totals")
-
-    def _pt(self, measure: str, season: str, season_type: str) -> pd.DataFrame:
-        from nba_api.stats.endpoints import LeagueDashPtStats
-        return self._call(LeagueDashPtStats, season=season, season_type_all_star=season_type,
-                          pt_measure_type=measure, per_mode_simple="Totals", player_or_team="Player")
-
-    def _hustle(self, season: str, season_type: str) -> pd.DataFrame:
-        from nba_api.stats.endpoints import LeagueHustleStatsPlayer
-        return self._call(LeagueHustleStatsPlayer, season=season, season_type_all_star=season_type,
-                          per_mode_time="Totals")
-
-    def _matchups(self, season: str, season_type: str) -> pd.DataFrame:
-        from nba_api.stats.endpoints import MatchupsRollup
-        from nba_api.stats.static import teams
-
+    def _table(self, table: str, season: str, season_type: str) -> pd.DataFrame:
+        cls, kwargs = request_spec(table, season, season_type)
+        if table != "matchups":
+            return self._call(cls, **kwargs)
         try:
-            df = self._call(MatchupsRollup, season=season, season_type_playoffs=season_type,
-                            per_mode_simple="Totals")
+            df = self._call(cls, **kwargs)
         except RuntimeError as err:
             log.info("league-wide matchup rollup failed for %s (%s)", season, err)
             df = pd.DataFrame()
@@ -110,12 +125,11 @@ class NBAStatsFetcher:
         # Some seasons only answer per defending team; fall back to 30 smaller requests.
         log.info("league-wide matchup rollup empty for %s; fetching per team", season)
         parts = []
-        for team in teams.get_teams():
-            part = self._call(MatchupsRollup, season=season, season_type_playoffs=season_type,
-                              per_mode_simple="Totals", def_team_id_nullable=str(team["id"]))
+        for team_id in team_ids():
+            cls, kwargs = request_spec(table, season, season_type, def_team_id=team_id)
+            part = self._call(cls, **kwargs)
             if len(part):
-                part = part.assign(DEF_TEAM_ID=team["id"])
-                parts.append(part)
+                parts.append(part.assign(DEF_TEAM_ID=team_id))
         return pd.concat(parts, ignore_index=True) if parts else df
 
     def fetch(self, table: str, season: str, season_type: str = REGULAR,
@@ -125,16 +139,8 @@ class NBAStatsFetcher:
             return None
         if not refresh and self.cache.has(season, season_type, table):
             return self.cache.read(season, season_type, table)
-        getter = {
-            "gamelog": self._gamelog,
-            "advanced": self._advanced,
-            "passing": lambda s, t: self._pt("Passing", s, t),
-            "catch_shoot": lambda s, t: self._pt("CatchShoot", s, t),
-            "hustle": self._hustle,
-            "matchups": self._matchups,
-        }[table]
         log.info("downloading %s %s (%s)", table, season, season_type)
-        df = getter(season, season_type)
+        df = self._table(table, season, season_type)
         if df is None or df.empty:
             if season_type == PLAYOFFS:
                 df = pd.DataFrame()  # season without playoffs yet: cache the empty answer

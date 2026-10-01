@@ -39,3 +39,9 @@ def test_config_rejects_bad_corner_order(tmp_path):
     path.write_text(yaml.safe_dump(raw))
     with pytest.raises(ValueError, match="permutation"):
         load_config(path)
+
+
+def test_fetch_stops_early_in_codespaces(monkeypatch, capsys):
+    monkeypatch.setenv("CODESPACES", "true")
+    assert main(["--config", str(ROOT / "config.yaml"), "fetch"]) == 2
+    assert "browser-script" in capsys.readouterr().err

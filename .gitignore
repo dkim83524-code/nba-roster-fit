@@ -1,6 +1,8 @@
 # Downloaded and derived data stays local: NBA.com and DARKO data are not ours to republish.
 data/cache/
 data/manual/**/*.csv
+data/manual/**/*.json
+data/manual/**/*.js
 data/processed/
 outputs/
 

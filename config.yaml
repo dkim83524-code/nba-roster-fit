@@ -92,6 +92,7 @@ drawing:
 
 fetch:
   cache_dir: "data/cache"
+  manual_dir: "data/manual/nba"      # NBA.com responses saved by hand; copied into the cache on every run
   sleep_seconds: 1.0                 # pause between NBA.com requests
   timeout: 60
   retries: 3
