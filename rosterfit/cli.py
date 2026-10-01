@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -43,9 +44,29 @@ def _open_cache(cfg: Config) -> Cache:
     return cache
 
 
+# Hosted dev environments whose servers NBA.com silently ignores (requests just time out).
+_HOSTED = {"CODESPACES": "GitHub Codespaces", "GITPOD_WORKSPACE_ID": "Gitpod",
+           "CLOUD_SHELL": "Google Cloud Shell", "REPL_ID": "Replit"}
+
+
+def hosted_environment() -> str | None:
+    for var, name in _HOSTED.items():
+        if os.environ.get(var):
+            return name
+    return None
+
+
 def cmd_fetch(cfg: Config, args) -> int:
     from .metrics.players import required_tables
 
+    hosted = hosted_environment()
+    if hosted and not args.anyway:
+        print(f"This is running in {hosted}, on a cloud server. NBA.com ignores requests from cloud\n"
+              "servers, so fetch would only time out. Either run fetch on your own computer, or download\n"
+              "from your browser (your browser runs on your computer, so it works):\n\n"
+              "  python -m rosterfit browser-script\n\n"
+              "(Use `fetch --anyway` to try regardless.)", file=sys.stderr)
+        return 2
     cache = _open_cache(cfg)
     fetcher = NBAStatsFetcher(cache, cfg.fetch.sleep_seconds, cfg.fetch.timeout, cfg.fetch.retries)
     tables = args.tables.split(",") if args.tables else required_tables(cfg)
@@ -177,15 +198,18 @@ def cmd_browser_script(cfg: Config, args) -> int:
     out = Path(args.out) if args.out else cfg.path(cfg.fetch.manual_dir) / "download_nba_stats.js"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(browser_script(jobs))
+    hosted = hosted_environment()
+    move = (f"In {hosted}: drag the files from your Downloads folder onto {cfg.fetch.manual_dir} in the\n"
+            "   Explorer panel (or right-click that folder > Upload...)." if hosted else
+            f"Move the downloaded nba_stats_<season>.json files into {cfg.path(cfg.fetch.manual_dir)}")
     minutes = len(jobs) * 3 / 60  # pause + response time; game logs are several MB each
     print(f"""Wrote {out} ({len(jobs)} requests, roughly {max(1, round(minutes))} min).
 
-1. Open https://www.nba.com/stats in Chrome, Edge or Firefox.
-2. Open the console: Cmd+Option+J (Mac) or Ctrl+Shift+J (Windows).
-   Chrome may ask you to type "allow pasting" first.
-3. Paste the whole contents of {out.name} and press Enter. Stay on the tab until it says Done,
-   and allow multiple downloads if asked.
-4. Move the downloaded nba_stats_<season>.json files into {cfg.path(cfg.fetch.manual_dir)}
+1. Open {out.name} in the editor, select all and copy it.
+2. In a new browser tab open https://www.nba.com/stats, then its console:
+   Cmd+Option+J (Mac) or Ctrl+Shift+J (Windows). Chrome may ask you to type "allow pasting" first.
+3. Paste and press Enter. Stay on the tab until it says Done; allow multiple downloads if asked.
+4. {move}
 5. Run: python -m rosterfit check""")
     return 0
 
@@ -220,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seasons", help="'2025-26' or '2017-18:2025-26' (default: the window + target)")
     p.add_argument("--tables", help=f"comma list from: {', '.join(TABLES)} (default: what the config needs)")
     p.add_argument("--refresh", action="store_true", help="redownload even if cached")
+    p.add_argument("--anyway", action="store_true", help="try even in a hosted environment like Codespaces")
     p.set_defaults(func=cmd_fetch)
 
     p = sub.add_parser("browser-script",

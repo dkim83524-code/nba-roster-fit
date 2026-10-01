@@ -96,6 +96,10 @@ python -m rosterfit browser-script   # writes data/manual/nba/download_nba_stats
    multiple downloads if asked.
 3. Move the downloaded `nba_stats_<season>.json` files into `data/manual/nba/`.
 
+This is the route to use in GitHub Codespaces, where `fetch` stops right away because NBA.com
+ignores cloud servers. Your browser still runs on your own computer, so the script works. Upload
+the downloaded files by dragging them onto `data/manual/nba` in the Explorer panel.
+
 The script makes exactly the requests `fetch` would. Single responses saved by hand also work:
 in the Network tab, find the `stats.nba.com` request, use "Save response" or "Copy response", and
 save it as a `.json` file in `data/manual/nba/`. The importer recognizes which table and season
