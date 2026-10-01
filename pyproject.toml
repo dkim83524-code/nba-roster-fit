@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nba-roster-fit"
+version = "0.1.0"
+description = "Stats-based roster-fit diagrams for NBA teams"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "nba_api>=1.11",
+    "pandas>=2.1",
+    "numpy>=1.26",
+    "shapely>=2.0",
+    "matplotlib>=3.8",
+    "pyyaml>=6.0",
+    "pyarrow>=14",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+rosterfit = "rosterfit.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["rosterfit*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
