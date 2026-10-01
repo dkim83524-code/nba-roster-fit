@@ -45,3 +45,17 @@ def test_fetch_stops_early_in_codespaces(monkeypatch, capsys):
     monkeypatch.setenv("CODESPACES", "true")
     assert main(["--config", str(ROOT / "config.yaml"), "fetch"]) == 2
     assert "browser-script" in capsys.readouterr().err
+
+
+def test_config_local_overlays_and_is_validated(tmp_path):
+    raw = yaml.safe_load((ROOT / "config.yaml").read_text())
+    (tmp_path / "config.yaml").write_text(yaml.safe_dump(raw))
+    (tmp_path / "config.local.yaml").write_text(yaml.safe_dump(
+        {"playmaking": {"component_scaling": "rank", "weights": {"turnovers_per100": 0.2}}}))
+    cfg = load_config(tmp_path / "config.yaml")
+    assert cfg.playmaking.component_scaling == "rank"
+    assert cfg.playmaking.weights["turnovers_per100"] == 0.2
+    assert cfg.playmaking.weights["potential_ast_per100"] == 0.5  # untouched keys keep their value
+    (tmp_path / "config.local.yaml").write_text(yaml.safe_dump({"team": {"cap_moed": "x"}}))
+    with pytest.raises(ValueError, match="unknown key"):
+        load_config(tmp_path / "config.yaml")

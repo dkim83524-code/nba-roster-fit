@@ -28,6 +28,9 @@ Details on each component:
 - **C&S 3-point proficiency** is Ben Taylor's 3-pt proficiency curve applied to catch-and-shoot
   3s: a sigmoid on attempts per 100 times C&S 3P%. The percentage is shrunk toward league average
   by 50 attempts.
+- Both composites can be scored two ways (`component_scaling`): plain z-scores, or rank-based
+  z-scores. Portability uses rank, so one extreme stat (a center's OREB%) can't outweigh three
+  weak ones; playmaking uses plain z.
 - **Versatility** is the normalized entropy of a defender's matchup possessions against guards,
   forwards and centers. NBA.com only splits those three ways, so it's coarse.
 - **Box Creation** (Taylor's public formula) is available as a playmaking component with weight 0.
@@ -138,6 +141,17 @@ Each plot also writes a CSV next to the PNG with every number behind the picture
 
 Every weight, cap, threshold, corner order, label and season window lives in
 [`config.yaml`](config.yaml), with comments. Unknown keys are rejected, so typos fail loudly.
+
+For your own changes, create `config.local.yaml` next to it with only the keys you change. It is
+applied on top of `config.yaml`, is git-ignored, and never blocks a `git pull`. For example:
+
+```yaml
+playmaking:
+  component_scaling: "rank"
+impact:
+  name_overrides:
+    "Name In The DARKO CSV": "Name On NBA.com"
+```
 
 ## Data sources and terms
 

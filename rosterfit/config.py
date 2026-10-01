@@ -180,10 +180,32 @@ def validate(cfg: Config) -> None:
             raise ValueError("at least one component weight must be > 0")
 
 
+def _merge(base: dict, extra: dict) -> dict:
+    """Recursively overlay `extra` on `base` (mappings merge, everything else replaces)."""
+    out = dict(base)
+    for key, value in extra.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def local_path(path: str | Path) -> Path:
+    """config.yaml -> config.local.yaml: personal settings that git pull never touches."""
+    path = Path(path)
+    return path.with_name(f"{path.stem}.local{path.suffix}")
+
+
 def load_config(path: str | Path = "config.yaml") -> Config:
+    """Read config.yaml, then overlay config.local.yaml next to it if that file exists."""
     path = Path(path)
     with open(path) as fh:
         raw = yaml.safe_load(fh) or {}
+    local = local_path(path)
+    if local.exists():
+        with open(local) as fh:
+            raw = _merge(raw, yaml.safe_load(fh) or {})
     cfg = _build(Config, raw, "")
     cfg.base_dir = path.resolve().parent
     validate(cfg)
