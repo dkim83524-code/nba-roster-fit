@@ -4,6 +4,7 @@
     python -m rosterfit check                       # what's cached, what's missing, DARKO matching
     python -m rosterfit plot --team NYK             # chart + CSV for one team, default season
     python -m rosterfit plot --team NYK --playoffs  # top-8 playoff rotation
+    python -m rosterfit compare --team NYK --vs SAS --playoffs   # two teams side by side
     python -m rosterfit explain --team NYK          # ingredients behind playmaking and portability
     python -m rosterfit demo                        # synthetic league, no network needed
     python -m rosterfit browser-script              # if fetch can't connect: download from your browser
@@ -268,6 +269,41 @@ def cmd_explain(cfg: Config, args) -> int:
     return 0
 
 
+def describe_compare(a: TeamResult, b: TeamResult, cfg: Config) -> str:
+    rows = [("Coverage", lambda r: f"{r.coverage * 100:.0f}%"),
+            ("Player shapes combined", lambda r: f"{r.union * 100:.0f}%"),
+            ("Overlap (squares)", lambda r: f"{r.overlap:.2f}")]
+    rows += [(f"Redundancy: {cfg.label(c)}", lambda r, c=c: f"+{r.redundancy_players.get(c, 0):.2f}")
+             for c in cfg.team.capped_corners]
+    rows += [(f"{cfg.label(c)} (team pct)", lambda r, c=c: f"{r.pct[c]:.0f}") for c in cfg.corners.order]
+    lines = [f"{a.team_name} vs {b.team_name} - {a.season} {a.mode}",
+             f"{'':<34}{a.team:>8}{b.team:>8}"]
+    lines += [f"{name:<34}{fmt(a):>8}{fmt(b):>8}" for name, fmt in rows]
+    return "\n".join(lines)
+
+
+def cmd_compare(cfg: Config, args) -> int:
+    import pandas as pd
+
+    from .plot import render_compare
+
+    season = args.season or cfg.seasons.target
+    league = build_league(cfg, _open_cache(cfg), sorted(set(cfg.window_seasons) | {season}))
+    mode = PLAYOFF_MODE if args.playoffs else REGULAR_MODE
+    try:
+        a = evaluate_team(league, args.team.upper(), season, mode)
+        b = evaluate_team(league, args.vs.upper(), season, mode)
+    except ValueError as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 2
+    print(describe_compare(a, b, cfg))
+    out = Path(args.out) if args.out else cfg.path("outputs") / f"{a.team}_vs_{b.team}_{season}_{mode}.png"
+    png = render_compare(a, b, cfg, out, args.theme)
+    pd.concat([summary_table(a), summary_table(b)]).to_csv(png.with_suffix(".csv"), index=False)
+    print(f"\nWrote {png}\n      {png.with_suffix('.csv')}")
+    return 0
+
+
 def cmd_demo(cfg: Config, args) -> int:
     from .synthetic import make_league
 
@@ -308,6 +344,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--all", action="store_true", help="include tables that are already cached")
     p.add_argument("--out", help="where to write the script")
     p.set_defaults(func=cmd_browser_script)
+
+    p = sub.add_parser("compare", help="two teams side by side")
+    p.add_argument("--team", required=True, help="first team, e.g. NYK")
+    p.add_argument("--vs", required=True, help="second team, e.g. SAS")
+    p.add_argument("--season", help="default: seasons.target in config.yaml")
+    p.add_argument("--playoffs", action="store_true", help="compare top playoff rotations")
+    p.add_argument("--theme", choices=["light", "dark"])
+    p.add_argument("--out", help="output PNG path (a CSV with the same name is written next to it)")
+    p.set_defaults(func=cmd_compare)
 
     p = sub.add_parser("explain", help="show the ingredients behind playmaking and portability for a team")
     p.add_argument("--team", required=True)

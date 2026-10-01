@@ -73,3 +73,17 @@ def test_explain_lists_ingredients(league):
     assert table[["C&S 3s", "OREB%"]].stack().between(0, 100).all()
     text = format_table(table, "title", league.cfg.portability.weights, "rank")
     assert "weights: C&S 3s 0.25" in text and "scaling: rank" in text
+
+
+def test_compare_two_teams(league, tmp_path):
+    from rosterfit.cli import describe_compare
+    from rosterfit.plot import render_compare
+    from rosterfit.team import evaluate_team
+
+    other = [t for t in league.teams("2025-26") if t != "DEM"][0]
+    a = evaluate_team(league, "DEM", "2025-26")
+    b = evaluate_team(league, other, "2025-26")
+    text = describe_compare(a, b, league.cfg)
+    assert "Coverage" in text and f"{a.coverage * 100:.0f}%" in text and other in text
+    out = render_compare(a, b, league.cfg, tmp_path / "cmp.png")
+    assert out.stat().st_size > 50_000

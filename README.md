@@ -137,6 +137,19 @@ python -m rosterfit plot --team NYK --theme dark --out outputs/knicks_dark.png
 
 Each plot also writes a CSV next to the PNG with every number behind the picture.
 
+**Compare two teams, or look inside a corner**
+
+```bash
+python -m rosterfit compare --team NYK --vs SAS --playoffs   # both top-8 playoff rotations
+python -m rosterfit compare --team NYK --vs SAS              # both full regular-season rosters
+python -m rosterfit explain --team NYK                       # each player's percentile on every
+                                                             # playmaking and portability ingredient
+```
+
+The comparison puts both squares side by side, with coverage, combined shape area, overlap and
+redundancy between them. Underneath are each team's player table and the four team corner
+percentiles on one scale.
+
 ## Configuration
 
 Every weight, cap, threshold, corner order, label and season window lives in
@@ -176,11 +189,11 @@ rosterfit/
   geometry.py         shapes, areas, union (shapely)
   plot.py             matplotlib chart
   synthetic.py        made-up league for the demo and tests
-  cli.py              fetch | browser-script | check | plot | demo
+  explain.py          ingredient breakdown behind playmaking and portability
+  cli.py              fetch | browser-script | check | plot | compare | explain | demo
 ```
 
 ## Next
 
-- Side-by-side comparison of two teams.
 - A court-map panel (interior/perimeter × offense/defense) under the square.
 - Clutch study: team corner coverage vs clutch offensive rating and clutch assist rate.
