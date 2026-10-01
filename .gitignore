@@ -1,0 +1,15 @@
+# Downloaded and derived data stays local: NBA.com and DARKO data are not ours to republish.
+data/cache/
+data/manual/**/*.csv
+data/processed/
+outputs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+build/
+dist/

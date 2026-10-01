@@ -1,0 +1,292 @@
+"""Render a team's roster-fit square with matplotlib.
+
+Layout: the square on the left (player shapes + team outline); on the right the headline
+numbers, team corner percentiles, the player table, and one small square per colored player.
+Every player is named on the chart and in the table, so identity never rests on color alone.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+from matplotlib.patches import Polygon as MplPolygon  # noqa: E402
+
+from . import geometry  # noqa: E402
+from .config import CORNERS, Config  # noqa: E402
+from .team import PLAYOFF_MODE, TeamResult  # noqa: E402
+
+THEMES = {
+    "light": {
+        "surface": "#fcfcfb", "ink": "#0b0b0b", "ink2": "#52514e", "muted": "#898781",
+        "grid": "#e1e0d9", "axis": "#c3c2b7", "other": "#898781",
+        "series": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"],
+    },
+    "dark": {
+        "surface": "#1a1a19", "ink": "#ffffff", "ink2": "#c3c2b7", "muted": "#898781",
+        "grid": "#2c2c2a", "axis": "#383835", "other": "#898781",
+        "series": ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"],
+    },
+}
+FONT = ["Inter", "Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"]
+
+
+def _fmt_pct(x: float) -> str:
+    return "–" if x is None or np.isnan(x) else f"{x:.0f}"
+
+
+def _frame(ax, theme, order, labels=None, descriptions=None, rings=(0.25, 0.5, 0.75), small=False):
+    """Square outline, percentile rings, diagonals and (optionally) corner labels."""
+    ax.set_aspect("equal")
+    ax.axis("off")
+    for p in rings:
+        ax.add_patch(MplPolygon(geometry.CORNER_XY * p, closed=True, fill=False,
+                                ec=theme["grid"], lw=0.8, zorder=1))
+    for x, y in geometry.CORNER_XY:
+        ax.plot([0, x], [0, y], color=theme["grid"], lw=0.8, zorder=1, solid_capstyle="butt")
+    ax.add_patch(MplPolygon(geometry.CORNER_XY, closed=True, fill=False, ec=theme["axis"],
+                            lw=1.0 if small else 1.2, zorder=1))
+    if small or labels is None:
+        return
+    for p in rings:
+        ax.text(0, p - 0.012, f"{p * 100:.0f}", ha="center", va="top", fontsize=8,
+                color=theme["muted"], zorder=2)
+    for i, corner in enumerate(order):
+        x, y = geometry.CORNER_XY[i]
+        ha = "left" if x < 0 else "right"
+        va = "bottom" if y > 0 else "top"
+        dy = 0.05 if y > 0 else -0.05
+        head, sub = labels[corner], descriptions.get(corner, "")
+        if y > 0:
+            ax.text(x, y + dy + 0.055, head, ha=ha, va=va, fontsize=13, fontweight="bold", color=theme["ink"])
+            ax.text(x, y + dy, sub, ha=ha, va=va, fontsize=9, color=theme["ink2"])
+        else:
+            ax.text(x, y + dy, head, ha=ha, va=va, fontsize=13, fontweight="bold", color=theme["ink"])
+            ax.text(x, y + dy - 0.06, sub, ha=ha, va=va, fontsize=9, color=theme["ink2"])
+
+
+def _place_labels(candidates, char_w=0.021, h=0.055):
+    """Greedy label placement: for each label try a few spots and keep the first that doesn't collide."""
+    placed = []
+
+    def box(x, y, w, ha):
+        x0 = x if ha == "left" else x - w
+        return (x0, y - h / 2, x0 + w, y + h / 2)
+
+    def hits(b):
+        if b[0] < -1.17 or b[2] > 1.17 or b[1] < -1.0 or b[3] > 1.0:
+            return True
+        return any(not (b[2] < o[0] or b[0] > o[2] or b[3] < o[1] or b[1] > o[3]) for o in placed)
+
+    out = []
+    for name, (vx, vy) in candidates:
+        w = char_w * len(name) + 0.01
+        direction = np.array([vx, vy]) / (np.hypot(vx, vy) or 1)
+        chosen = None
+        for dist in (0.06, 0.12, 0.2, 0.3):
+            for turn in (0, 25, -25, 50, -50, 90, -90):
+                a = np.deg2rad(turn)
+                d = np.array([direction[0] * np.cos(a) - direction[1] * np.sin(a),
+                              direction[0] * np.sin(a) + direction[1] * np.cos(a)])
+                lx, ly = vx + d[0] * dist, vy + d[1] * dist
+                ha = "left" if d[0] >= 0 else "right"
+                b = box(lx, ly, w, ha)
+                if not hits(b):
+                    chosen = (lx, ly, ha, b)
+                    break
+            if chosen:
+                break
+        if chosen is None:  # crowded: accept the plain outward spot
+            lx, ly = vx + direction[0] * 0.06, vy + direction[1] * 0.06
+            ha = "left" if direction[0] >= 0 else "right"
+            chosen = (lx, ly, ha, box(lx, ly, w, ha))
+        placed.append(chosen[3])
+        out.append((name, (vx, vy), chosen[:3]))
+    return out
+
+
+def render(result: TeamResult, cfg: Config, out_path: str | Path, theme_name: str | None = None) -> Path:
+    theme = THEMES[theme_name or cfg.drawing.theme]
+    order = cfg.corners.order
+    labels = {c: cfg.label(c) for c in CORNERS}
+    plt.rcParams.update({"font.family": "sans-serif", "font.sans-serif": FONT})
+
+    fig = plt.figure(figsize=(16, 10), facecolor=theme["surface"])
+    roster = result.roster
+    drawn = roster[roster["drawn"]].sort_values("MIN", ascending=False)
+    colored = drawn.head(cfg.drawing.max_colored_players)
+    others = drawn.iloc[len(colored):]
+    colors = dict(zip(colored["PLAYER_ID"], theme["series"]))
+
+    # -- title ------------------------------------------------------------------------------
+    mode = "playoff rotation (top %d)" % cfg.playoffs.rotation_size if result.mode == PLAYOFF_MODE \
+        else "regular season"
+    fig.text(0.03, 0.955, f"{result.team_name} · {result.season} {mode}", fontsize=21,
+             fontweight="bold", color=theme["ink"], va="center")
+    fig.text(0.03, 0.918,
+             f"Player shapes: percentile among {result.qualified_n} qualified players "
+             f"(≥{cfg.qualified.min_gp} GP, ≥{cfg.qualified.min_mpg:g} MPG); shape area ∝ minutes.  "
+             f"Team outline: percentile vs {result.pool_size} team-seasons "
+             f"({_season_span(result.pool_seasons)}).",
+             fontsize=10.5, color=theme["ink2"], va="center")
+    if result.synthetic:
+        fig.text(0.97, 0.955, "SYNTHETIC DATA · not real players", fontsize=12, fontweight="bold",
+                 color=theme["series"][7], ha="right", va="center")
+
+    # -- the square -------------------------------------------------------------------------
+    ax = fig.add_axes([0.02, 0.06, 0.54, 0.83], facecolor=theme["surface"])
+    _frame(ax, theme, order, labels, cfg.corners.descriptions)
+    ax.set_xlim(-1.2, 1.2)
+    ax.set_ylim(-1.25, 1.25)
+
+    def pts(row, scale=None):
+        vals = {c: row[f"{c}_pct"] / 100 for c in CORNERS}
+        return geometry.shape_points(vals, order, row["scale"] if scale is None else scale)
+
+    for _, row in others.iterrows():
+        p = pts(row)
+        ax.add_patch(MplPolygon(p, closed=True, fc=theme["other"], ec="none", alpha=0.07, zorder=2))
+        ax.add_patch(MplPolygon(p, closed=True, fill=False, ec=theme["other"], lw=0.8, alpha=0.6, zorder=2))
+    for _, row in colored.iloc[::-1].iterrows():
+        p = pts(row)
+        c = colors[row["PLAYER_ID"]]
+        ax.add_patch(MplPolygon(p, closed=True, fc=c, ec="none", alpha=cfg.drawing.fill_alpha, zorder=3))
+        ax.add_patch(MplPolygon(p, closed=True, fill=False, ec=c, lw=2, joinstyle="round", zorder=4))
+
+    team_pts = geometry.shape_points({c: result.pct[c] / 100 for c in CORNERS}, order)
+    ax.add_patch(MplPolygon(team_pts, closed=True, fill=False, ec=theme["ink"], lw=2.6,
+                            joinstyle="round", zorder=6))
+
+    candidates = []
+    for _, row in colored.iterrows():
+        p = pts(row)
+        tip = p[np.argmax(np.hypot(p[:, 0], p[:, 1]))]
+        candidates.append((row["PLAYER_NAME"], tuple(tip)))
+    for (name, (vx, vy), (lx, ly, ha)), (_, row) in zip(_place_labels(candidates), colored.iterrows()):
+        c = colors[row["PLAYER_ID"]]
+        ax.plot([vx, lx], [vy, ly], color=theme["ink2"], lw=0.7, zorder=7)
+        ax.scatter([vx], [vy], s=46, color=c, edgecolors=theme["surface"], linewidths=2, zorder=8)
+        ax.text(lx, ly, name, ha=ha, va="center", fontsize=10, color=theme["ink"], zorder=9,
+                bbox=dict(boxstyle="round,pad=0.15", fc=theme["surface"], ec="none", alpha=0.85))
+
+    # legend under the square
+    ly = -1.205
+    ax.plot([-1.0, -0.9], [ly, ly], color=theme["ink"], lw=2.6)
+    ax.text(-0.87, ly, "Team (vs all team-seasons)", va="center", fontsize=9.5, color=theme["ink"])
+    ax.add_patch(MplPolygon([[-0.15, ly - 0.025], [-0.07, ly - 0.025], [-0.07, ly + 0.025], [-0.15, ly + 0.025]],
+                            closed=True, fc=theme["series"][0], alpha=0.25, ec=theme["series"][0], lw=1.5))
+    ax.text(-0.04, ly, "Player (vs league)", va="center", fontsize=9.5, color=theme["ink"])
+    if len(others):
+        ax.add_patch(MplPolygon([[0.5, ly - 0.025], [0.58, ly - 0.025], [0.58, ly + 0.025], [0.5, ly + 0.025]],
+                                closed=True, fc=theme["other"], alpha=0.15, ec=theme["other"], lw=1))
+        ax.text(0.61, ly, f"{len(others)} more (gray)", va="center", fontsize=9.5, color=theme["ink"])
+
+    # -- headline numbers -------------------------------------------------------------------
+    x0 = 0.6
+    fig.text(x0, 0.865, "Coverage", fontsize=11, color=theme["ink2"])
+    fig.text(x0, 0.80, f"{result.coverage * 100:.0f}%", fontsize=44, fontweight="bold",
+             color=theme["ink"], va="center")
+    fig.text(x0, 0.748, "of the square filled by the team outline", fontsize=9, color=theme["ink2"])
+
+    share = result.overlap / result.sum_areas * 100 if result.sum_areas else 0.0
+    tiles = [
+        ("Player shapes combined", f"{result.union * 100:.0f}%", "of the square"),
+        ("Overlap", f"{result.overlap:.2f} sq", f"{share:.0f}% of all shape area is shared"),
+    ]
+    red = " · ".join(f"{labels[c]} +{result.redundancy_players[c]:.1f}"
+                     for c in cfg.team.capped_corners if c in result.redundancy_players)
+    binding = ", ".join(f"{result.cap_binding_share[c] * 100:.0f}%" for c in cfg.team.capped_corners
+                        if c in result.cap_binding_share)
+    for i, (head, value, sub) in enumerate(tiles):
+        tx = x0 + 0.13 + i * 0.13
+        fig.text(tx, 0.865, head, fontsize=10, color=theme["ink2"])
+        fig.text(tx, 0.81, value, fontsize=22, fontweight="bold", color=theme["ink"], va="center")
+        fig.text(tx, 0.768, sub, fontsize=8.5, color=theme["ink2"], wrap=True)
+    fig.text(x0, 0.712, "Redundancy above the cap, in players' worth", fontsize=10, color=theme["ink2"])
+    fig.text(x0, 0.688, red or "none", fontsize=11, color=theme["ink"], fontweight="bold")
+    fig.text(x0, 0.666, f"Cap binds for {binding} of team-seasons ({cfg.team.cap_mode.replace('_', ' ')})",
+             fontsize=8.5, color=theme["ink2"])
+
+    # -- team corner percentiles ------------------------------------------------------------
+    fig.text(x0, 0.628, "Team corner percentiles", fontsize=10.5, color=theme["ink2"])
+    bx = fig.add_axes([x0, 0.505, 0.36, 0.115], facecolor=theme["surface"])
+    bx.axis("off")
+    bx.set_xlim(0, 1)
+    bx.set_ylim(-0.5, len(order) - 0.5)
+    for i, corner in enumerate(order):
+        y = len(order) - 1 - i
+        bx.text(0.0, y, labels[corner], va="center", fontsize=10, color=theme["ink"])
+        bx.barh(y, 0.62, left=0.3, height=0.42, color=theme["grid"])
+        bx.barh(y, 0.62 * result.pct[corner] / 100, left=0.3, height=0.42, color=theme["ink"])
+        bx.text(0.94, y, _fmt_pct(result.pct[corner]), va="center", ha="left", fontsize=10,
+                color=theme["ink"])
+
+    # -- player table -----------------------------------------------------------------------
+    tx = fig.add_axes([x0, 0.31, 0.38, 0.185], facecolor=theme["surface"])
+    tx.axis("off")
+    rows = list(colored.iterrows())
+    n = len(rows) + (1 if len(others) else 0) + 1
+    tx.set_ylim(-0.5, max(n, 10) - 0.5)
+    tx.set_xlim(0, 1)
+    cols = [("Player", 0.04, "left"), ("MIN", 0.46, "right")] + \
+           [(labels[c].split()[0] if len(labels[c]) > 9 else labels[c], 0.58 + 0.11 * i, "right")
+            for i, c in enumerate(order)]
+    top = max(n, 10) - 1
+    for head, x, ha in cols:
+        tx.text(x, top, head, ha=ha, va="center", fontsize=9, color=theme["muted"], fontweight="bold")
+    for k, (_, row) in enumerate(rows):
+        y = top - 1 - k
+        tx.scatter([0.012], [y], s=40, color=colors[row["PLAYER_ID"]], edgecolors=theme["surface"], linewidths=1.5)
+        tx.text(0.04, y, row["PLAYER_NAME"], va="center", fontsize=9.5, color=theme["ink"])
+        tx.text(0.46, y, f"{row['MIN']:,.0f}", va="center", ha="right", fontsize=9.5, color=theme["ink"])
+        for i, c in enumerate(order):
+            tx.text(0.58 + 0.11 * i, y, _fmt_pct(row[f"{c}_pct"]), va="center", ha="right",
+                    fontsize=9.5, color=theme["ink"])
+    if len(others):
+        y = top - 1 - len(rows)
+        mins_share = others["MIN"].sum() / roster["MIN"].sum() * 100
+        tx.scatter([0.012], [y], s=40, color=theme["other"], edgecolors=theme["surface"], linewidths=1.5)
+        tx.text(0.04, y, f"{len(others)} others ({mins_share:.0f}% of minutes)", va="center",
+                fontsize=9.5, color=theme["ink2"])
+
+    # -- small multiples --------------------------------------------------------------------
+    per_row = 4
+    width = 0.064                                   # figure fraction; height keeps the square square
+    height = width * fig.get_figwidth() / fig.get_figheight()
+    for k, (_, row) in enumerate(rows[:8]):
+        r, col = divmod(k, per_row)
+        sx = fig.add_axes([x0 + col * (width + 0.03), 0.165 - r * (height + 0.03), width, height],
+                          facecolor=theme["surface"])
+        _frame(sx, theme, order, small=True, rings=(0.5,))
+        sx.set_xlim(-1.08, 1.08)
+        sx.set_ylim(-1.08, 1.08)
+        p = pts(row, scale=1.0)
+        c = colors[row["PLAYER_ID"]]
+        sx.add_patch(MplPolygon(p, closed=True, fc=c, ec="none", alpha=0.22))
+        sx.add_patch(MplPolygon(p, closed=True, fill=False, ec=c, lw=1.6, joinstyle="round"))
+        sx.set_title(row["PLAYER_NAME"], fontsize=8.5, color=theme["ink"], pad=2)
+    if rows:
+        fig.text(x0, 0.297, "Each player at full size (not scaled by minutes)", fontsize=9.5,
+                 color=theme["ink2"])
+
+    # -- footer -----------------------------------------------------------------------------
+    notes = []
+    if result.not_drawn:
+        notes.append("Not drawn (missing data): " + ", ".join(result.not_drawn[:6]))
+    notes.append(f"Data: NBA.com via nba_api; {cfg.impact.source_name} for offense/defense.")
+    fig.text(0.03, 0.022, "   ".join(notes), fontsize=8.5, color=theme["muted"])
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=cfg.drawing.dpi, facecolor=theme["surface"])
+    plt.close(fig)
+    return out_path
+
+
+def _season_span(seasons: list[str]) -> str:
+    if not seasons:
+        return "no complete seasons"
+    return seasons[0] if len(seasons) == 1 else f"{seasons[0]} to {seasons[-1]}"

@@ -1,0 +1,97 @@
+# Roster-fit configuration. Every weight, cap, threshold and metric choice lives here.
+# Unknown keys are rejected, so a typo fails loudly instead of being ignored.
+
+seasons:
+  target: "2025-26"                  # default season for `plot`
+  window: ["2017-18", "2025-26"]     # team-percentile pool: every team-season in this range
+                                     # (2017-18 is the first season with NBA.com matchup data)
+
+qualified:                           # the league-wide pool that player percentiles and z-scores use
+  min_gp: 25
+  min_mpg: 15.0
+
+corners:
+  # Clockwise from top-left: TL, TR, BR, BL. Only neighboring corners multiply in a shape's area:
+  # area = (sum of one opposite pair) x (sum of the other) / 4.
+  order: [offense, playmaking, portability, defense]
+  labels:
+    offense: "Scores"
+    playmaking: "Sets up others"
+    portability: "Fits next to stars"
+    defense: "Stops"
+  descriptions:
+    offense: "O-DPM (DARKO)"
+    playmaking: "Potential AST + AST pts created / 100"
+    portability: "C&S 3s, OREB%, screen AST, versatility"
+    defense: "D-DPM (DARKO)"
+
+impact:                              # offense and defense corners: halves of one plus-minus metric
+  source_name: "DARKO"
+  dir: "data/manual/darko"           # CSVs you download yourself from darko.app (no scraping)
+  # Column aliases, matched after lower-casing and turning punctuation/spaces into "_".
+  columns:
+    player_id: ["nba_id", "nbaid", "player_id", "playerid", "nba_player_id", "id"]
+    player_name: ["player_name", "player", "name", "full_name"]
+    offense: ["o_dpm", "odpm", "offensive_dpm", "off_dpm", "o_darko", "offense"]
+    defense: ["d_dpm", "ddpm", "defensive_dpm", "def_dpm", "d_darko", "defense"]
+    season: ["season", "season_id", "year"]
+    date: ["date", "game_date", "as_of", "asof"]
+  numeric_season_is_end_year: true   # a season column of 2026 means 2025-26
+  defense_higher_is_better: true
+  # Optional extra smoothing of defense across seasons (DARKO already decays past seasons,
+  # so this is off by default). Weights apply to seasons t, t-1, t-2.
+  defense_multi_year:
+    enabled: false
+    weights: [0.6, 0.3, 0.1]
+  name_overrides: {}                 # "Name As Spelled In CSV": nba_player_id, for names that don't match
+
+playmaking:                          # creating for teammates; self-scoring belongs in offense
+  weights:                           # each component is z-scored within the qualified pool first
+    potential_ast_per100: 0.5
+    ast_pts_created_per100: 0.5
+    turnovers_per100: 0.0            # counted as a negative when > 0
+    box_creation: 0.0                # Ben Taylor's Box Creation; includes a scorer-gravity term
+  min_weight_present: 0.5            # need at least this share of the weight to score a player
+
+portability:                         # value kept without the ball
+  weights:
+    cs3_proficiency: 0.25            # Taylor's 3-pt proficiency curve on catch-and-shoot 3s
+    oreb_pct: 0.25
+    screen_ast_per100: 0.25
+    versatility: 0.25                # spread of matchup time across guards / forwards / centers
+  min_weight_present: 0.5
+  cs3_pct_prior_attempts: 50         # shrink C&S 3P% toward league average by this many attempts
+  versatility_min_partial_poss: 300  # fewer matchup possessions than this -> no versatility score
+
+team:
+  on_court_slots: 5                  # minutes weights sum to 5; a 48-minute player counts 1.0
+  capped_corners: [playmaking, portability]
+  floor_negative_corners: [playmaking, portability]  # below-average players add 0, not a negative
+  # How the cap on capped corners is set:
+  #   pool_percentile: the corner is full once a team reaches this percentile of all team-seasons
+  #                    in the window. Always binds for the same share of teams.
+  #   players_worth:   cap = cap_players_worth x one player's worth. With the zero floor above,
+  #                    1.75 sits below the median team (binds for ~3/4 of teams in testing).
+  cap_mode: "pool_percentile"
+  cap_pool_percentile: 80
+  cap_players_worth: 1.75
+  cap_reference_percentile: 85       # one "player's worth" = this percentile player ...
+  cap_reference_mpg: 34              # ... at these minutes per game (also the unit for redundancy)
+  missing_value_z: 0.0               # z used for a player with no data in an uncapped corner
+
+playoffs:
+  rotation_size: 8                   # top N by playoff minutes; metrics still come from the regular season
+
+drawing:
+  theme: "light"                     # light | dark
+  minutes_scaling: "area"            # area: shape area proportional to minutes vs the team's leader; none
+  min_minutes_to_draw: 100
+  max_colored_players: 8             # the rest are drawn in gray as "Other"
+  fill_alpha: 0.16
+  dpi: 200
+
+fetch:
+  cache_dir: "data/cache"
+  sleep_seconds: 1.0                 # pause between NBA.com requests
+  timeout: 60
+  retries: 3
