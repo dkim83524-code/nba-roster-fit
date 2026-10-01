@@ -61,7 +61,8 @@ def build_web_data(league: League, cfg: Config, synthetic: bool = False,
             rows.append([pid, str(r.PLAYER_NAME), teams.get(pid, ""), int(r.GP), _num(r.MIN), int(bool(r.qualified))]
                         + [_num(getattr(r, f"{c}_pct")) for c in CORNERS]
                         + [_num(getattr(r, f"{c}_z")) for c in CORNERS]
-                        + [_text(getattr(r, "off_role", None)), _text(getattr(r, "def_role", None))])
+                        + [_text(getattr(r, "off_role", None)), _text(getattr(r, "def_role", None)),
+                           _text(getattr(r, "position", None))])
         players[season] = rows
 
     teams: dict[str, dict] = {}
@@ -102,6 +103,7 @@ def build_web_data(league: League, cfg: Config, synthetic: bool = False,
             "floor": list(cfg.team.floor_negative_corners),
             "missing_value_z": cfg.team.missing_value_z,
             "minutes_scaling": cfg.drawing.minutes_scaling,
+            "scale": cfg.drawing.scale,
             "min_minutes_to_draw": cfg.drawing.min_minutes_to_draw,
             "max_colored": cfg.drawing.max_colored_players,
             "rotation_size": cfg.playoffs.rotation_size,
@@ -124,7 +126,7 @@ def build_web_data(league: League, cfg: Config, synthetic: bool = False,
 def add_game(data: dict, contract_season: str, contracts: pd.DataFrame, cap: float,
              min_minutes: float = 500) -> dict:
     """Add the cap game's deck: every player with a contract that season and a full shape from the
-    latest stats season (min_minutes or more). Contracts are matched to players by name, or by a
+    latest stats season (min_minutes or more), with his position there (LEBRON's) when known. Contracts are matched to players by name, or by a
     PLAYER_ID column when there is one. Returns counts, plus the contract names that matched no
     player, biggest salaries first.
     """
@@ -140,7 +142,7 @@ def add_game(data: dict, contract_season: str, contracts: pd.DataFrame, cap: flo
         if r is None:
             unmatched.append(c.name)
         elif (r[4] or 0) >= min_minutes and all(v is not None for v in r[6:6 + 2 * n]):
-            deck.append([r[0], int(c.salary), c.team])
+            deck.append([r[0], int(c.salary), c.team, r[8 + 2 * n] if len(r) > 8 + 2 * n else None])
     data["game"] = {
         "contract_season": contract_season,
         "stats_season": stats_season,

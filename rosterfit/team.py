@@ -205,7 +205,7 @@ class TeamResult:
     redundancy_players: dict[str, float]
     cap_binding_share: dict[str, float]
     missing_minutes: dict[str, float]
-    depth: float
+    depth: float                     # area of the team outline drawn from `radii`
     sum_areas: float
     coverage: float
     overlap: float
@@ -215,6 +215,8 @@ class TeamResult:
     not_drawn: list[str]
     color_order: list[int] = field(default_factory=list)  # team's regular-season minutes order
     synthetic: bool = False
+    radii: dict[str, float] = field(default_factory=dict)  # team outline: distance along each diagonal
+    scale: str = "rank"
 
 
 def team_name(abbr: str) -> str:
@@ -253,9 +255,14 @@ def evaluate_team(league: League, team: str, season: str, mode: str = REGULAR_MO
         pool = pd.DataFrame([values])
     pct = {c: float(percentile_against([values[c]], pool[c])[0]) for c in CORNERS}
     order = cfg.corners.order
-    depth = geometry.area_fraction({c: pct[c] / 100 for c in CORNERS}, order)
+    scale = cfg.drawing.scale
+    radii = {c: geometry.radius(pct[c], pool[c].notna().sum(), scale) for c in CORNERS}
+    depth = geometry.area_fraction(radii, order)
 
     roster = sums.roster
+    n_players = int(league.players[season]["qualified"].sum())
+    for c in CORNERS:
+        roster[f"{c}_r"] = geometry.radius(roster[f"{c}_pct"].to_numpy(dtype=float), n_players, scale)
     complete = roster[[f"{c}_pct" for c in CORNERS]].notna().all(axis=1)
     drawable = complete if mode == PLAYOFF_MODE else complete & (roster["MIN"] >= cfg.drawing.min_minutes_to_draw)
     roster["drawn"] = drawable
@@ -270,7 +277,7 @@ def evaluate_team(league: League, team: str, season: str, mode: str = REGULAR_MO
             polys.append(None)
             areas.append(np.nan)
             continue
-        vals = {c: row[f"{c}_pct"] / 100 for c in CORNERS}
+        vals = {c: row[f"{c}_r"] for c in CORNERS}
         polys.append(geometry.to_polygon(geometry.shape_points(vals, order, row["scale"])))
         areas.append(geometry.area_fraction(vals, order, row["scale"]))
     roster["area"] = areas
@@ -285,7 +292,7 @@ def evaluate_team(league: League, team: str, season: str, mode: str = REGULAR_MO
         missing_minutes=sums.missing_minutes, depth=depth, sum_areas=sum_areas,
         coverage=coverage, overlap=overlap, pool_size=len(pool), pool_seasons=list(league.pool_seasons),
         qualified_n=int(league.players[season]["qualified"].sum()), not_drawn=not_drawn,
-        color_order=regular_order(league, team, season),
+        color_order=regular_order(league, team, season), radii=radii, scale=scale,
     )
 
 

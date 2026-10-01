@@ -25,8 +25,9 @@ def test_export_is_strict_json_with_the_expected_shape(data):
     assert m["impact_sources"][1]["defense"] == 2.0
     for season in m["seasons"]:
         row = data["players"][season][0]
-        assert len(row) == 8 + 2 * len(CORNERS)  # ... percentiles, z-scores, offensive role, defensive role
-        assert any(r[-1] for r in data["players"][season])
+        assert len(row) == 9 + 2 * len(CORNERS)  # ... percentiles, z-scores, off. role, def. role, position
+        assert any(r[-2] for r in data["players"][season])
+        assert {r[-1] for r in data["players"][season]} <= {"PG", "SG", "SF", "PF", "C", None}
         assert data["teams"][season]["DEM"]["name"] == "Demo Team"
         po = data["teams"][season]["DEM"]["playoffs"]
         assert 0 < len(po) <= m["rotation_size"]
@@ -105,10 +106,11 @@ def test_browser_math_matches_python(league, data, tmp_path):
     assert lineup["weights"] == [1, 1, 1, 1, 1]
     order = league.cfg.corners.order
     table = league.players[lineup["picks"][0]["season"]].set_index("PLAYER_ID")
+    n = int(table["qualified"].sum())
     polys = []
     for pick in lineup["picks"]:
         row = table.loc[pick["pid"]]
-        vals = {c: row[f"{c}_pct"] / 100 for c in CORNERS}
+        vals = {c: geometry.radius(row[f"{c}_pct"], n, league.cfg.drawing.scale) for c in CORNERS}
         polys.append(geometry.to_polygon(geometry.shape_points(vals, order)))
     assert lineup["coverage"] == pytest.approx(geometry.union_fraction(polys), abs=2e-3)
 
@@ -120,10 +122,11 @@ def test_cap_game_deck_holds_only_players_with_full_shapes(data):
     assert game["stats_season"] == "2025-26" and game["cap"] == 164_961_000
     assert info["deck"] == len(game["deck"]) > 0
     rows = {r[0]: r for r in data["players"]["2025-26"]}
-    for pid, salary, team in game["deck"]:
+    for pid, salary, team, pos in game["deck"]:
         r = rows[pid]
         assert r[4] >= 500 and all(v is not None for v in r[6:14])
         assert salary > 0 and team in data["teams"]["2025-26"]
+        assert pos == r[-1] and pos in {"PG", "SG", "SF", "PF", "C"}
     assert [d[1] for d in game["deck"]] == sorted((d[1] for d in game["deck"]), reverse=True)
     json.dumps(data, allow_nan=False)
 
@@ -148,8 +151,8 @@ const teams = ["SAS", "NYK", "BOS", "DEN", "OKC", "LAL"];
 const a = RF.dealOrder(teams, RF.hashSeed("2026-27|2026-10-01"));
 const b = RF.dealOrder(teams.slice().reverse(), RF.hashSeed("2026-27|2026-10-01"));
 const c = RF.dealOrder(teams, RF.hashSeed("2026-27|2026-10-02"));
-const floor = RF.signingFloor([[9, 2, 5], [3, 4], [], [7]]);
-console.log(JSON.stringify({ a, b, c, floor, afford: [RF.canAfford(10, 14, 2, 2), RF.canAfford(10, 13.9, 2, 2)] }));
+const floor = [RF.signingFloor([[9, 2, 5], [3, 4], [], [7]], 2), RF.signingFloor([[9, 2, 5], [3, 4], [], [7]], 5)];
+console.log(JSON.stringify({ a, b, c, floor, afford: [RF.canAfford(10, 14, 4), RF.canAfford(10, 13.9, 4)] }));
 """
 
 
@@ -163,4 +166,4 @@ def test_daily_deal_is_the_same_for_everyone(tmp_path):
     assert out["a"] == out["b"]  # input order doesn't matter, only the seed
     assert out["a"] != out["c"]
     assert out["afford"] == [True, False]
-    assert out["floor"] == 7  # the priciest of each team's cheapest: every team has someone at or under it
+    assert out["floor"] == [3, 7]  # 2 teams have someone at or under 3; with too few teams, the priciest minimum

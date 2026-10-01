@@ -30,11 +30,12 @@ TABLES: dict[str, Table] = {
     t.name: t
     for t in (
         Table("gamelog", "1996-97", (REGULAR, PLAYOFFS), "player game logs: minutes per team, GP, box score"),
-        Table("advanced", "1996-97", (REGULAR,), "advanced totals: possessions, OREB%"),
-        Table("passing", "2013-14", (REGULAR,), "passing tracking: potential assists, assist points created"),
-        Table("catch_shoot", "2013-14", (REGULAR,), "catch-and-shoot tracking: C&S 3PA / 3PM"),
-        Table("hustle", "2016-17", (REGULAR,), "hustle stats: screen assists"),
-        Table("matchups", "2017-18", (REGULAR,), "defensive matchup time by opponent position"),
+        # playoff versions too, for the playoff view's player numbers
+        Table("advanced", "1996-97", (REGULAR, PLAYOFFS), "advanced totals: possessions, OREB%"),
+        Table("passing", "2013-14", (REGULAR, PLAYOFFS), "passing tracking: potential assists, assist points created"),
+        Table("catch_shoot", "2013-14", (REGULAR, PLAYOFFS), "catch-and-shoot tracking: C&S 3PA / 3PM"),
+        Table("hustle", "2016-17", (REGULAR, PLAYOFFS), "hustle stats: screen assists"),
+        Table("matchups", "2017-18", (REGULAR, PLAYOFFS), "defensive matchup time by opponent position"),
     )
 }
 

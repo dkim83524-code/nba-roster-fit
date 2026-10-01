@@ -11,7 +11,7 @@ Accepted layouts, mixed freely:
     regular season is used, i.e. the end-of-regular-season value.
 
 Players are matched on an NBA.com player-id column when one exists, otherwise by name. Optional
-off_role / def_role columns (LEBRON's role labels) are carried through for the website.
+off_role / def_role / position columns (LEBRON's labels) are carried through for the website.
 """
 from __future__ import annotations
 
@@ -27,8 +27,9 @@ from ..seasons import previous, season_from_end_year, season_from_start, start_y
 from .names import match_names, normalize_column, normalize_name
 
 _FILE_SEASON = re.compile(r"(\d{4}-\d{2})")
-ROLES = ("off_role", "def_role")
-OUT_COLUMNS = ["season", "PLAYER_ID", "offense", "defense", *ROLES]
+# Text columns carried through when a source has them (LEBRON: roles and position)
+LABELS = ("off_role", "def_role", "position")
+OUT_COLUMNS = ["season", "PLAYER_ID", "offense", "defense", *LABELS]
 
 
 @dataclass
@@ -86,7 +87,7 @@ def read_impact_files(cfg: Config, source: str | None = None) -> tuple[pd.DataFr
         raw = pd.read_csv(path)
         cols = {normalize_column(c): c for c in raw.columns}
         found = {role: _resolve(cols, aliases.get(role, [])) for role in
-                 ("player_id", "player_name", "offense", "defense", "season", "date", *ROLES)}
+                 ("player_id", "player_name", "offense", "defense", "season", "date", *LABELS)}
         report.files.append(path.name)
         report.columns[path.name] = {k: v for k, v in found.items() if v}
         missing = [r for r in ("offense", "defense") if not found[r]]
@@ -104,7 +105,7 @@ def read_impact_files(cfg: Config, source: str | None = None) -> tuple[pd.DataFr
         out["player_id"] = (pd.to_numeric(raw[found["player_id"]], errors="coerce")
                             if found["player_id"] else np.nan)
         out["player_name"] = raw[found["player_name"]].astype(str) if found["player_name"] else ""
-        for role in ROLES:
+        for role in LABELS:
             out[role] = raw[found[role]].where(raw[found[role]].notna(), None) if found[role] else None
         if found["season"]:
             out["season"] = _season_values(raw[found["season"]], src.numeric_season_is_end_year)
@@ -119,7 +120,7 @@ def read_impact_files(cfg: Config, source: str | None = None) -> tuple[pd.DataFr
         frames.append(out)
     if not frames:
         empty = pd.DataFrame(columns=["season", "player_id", "player_name", "offense", "defense", "date",
-                                      *ROLES, "file"])
+                                      *LABELS, "file"])
         return empty, report
     long = pd.concat(frames, ignore_index=True)
     long = long.dropna(subset=["season"])
@@ -151,7 +152,7 @@ def _snapshot(rows: pd.DataFrame, season_end: pd.Timestamp | None) -> pd.DataFra
         u = rows[~dated].groupby("key", as_index=False).agg(
             offense=("offense", "mean"), defense=("defense", "mean"),
             player_id=("player_id", "first"), player_name=("player_name", "first"),
-            **{role: (role, "first") for role in ROLES})
+            **{role: (role, "first") for role in LABELS})
         parts.append(u)
     out = pd.concat(parts, ignore_index=True)
     return out.drop_duplicates("key", keep="first")

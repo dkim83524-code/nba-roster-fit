@@ -187,12 +187,19 @@ td.dim { color: var(--muted); }
 .budget-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 13.5px; color: var(--ink-2); }
 .pips i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--accent); margin-left: 4px; vertical-align: 0; }
 .pips i.on { background: var(--accent); }
+.pos-strip { list-style: none; margin: 12px 0 2px; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.pos-strip li { border: 1px solid var(--line); border-radius: 8px; padding: 5px 7px; min-width: 0; font-size: 12.5px; }
+.pos-strip b { display: block; font: 700 14px var(--font-display); letter-spacing: .04em; }
+.pos-strip span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.pos-strip li.open span { color: var(--muted); }
+.pos-strip li.filled b::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 5px; vertical-align: 1px; }
 .deal-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 12px; margin-bottom: 8px; }
 .deal-head h2 { font-size: 30px; line-height: 1.05; }
 .cands { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .cand { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 6px 6px; border-radius: 10px; border: 1px solid transparent; }
 .cand:hover { border-color: var(--line); background: var(--surface-2); }
-.cand.over { opacity: .5; }
+.cand.over, .cand.taken { opacity: .45; }
+.pos-badge { display: inline-block; min-width: 2.2em; text-align: center; font: 700 12px/1.5 var(--font-display); letter-spacing: .04em; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-right: 6px; color: var(--ink-2); vertical-align: 1px; }
 .cand .who { min-width: 0; }
 .cand .who b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cand .meta { font-size: 12.5px; color: var(--muted); }
@@ -425,11 +432,12 @@ td.dim { color: var(--muted); }
   function drawSquare(svg, res, opts) {
     svg.replaceChildren();
     svg.setAttribute("viewBox", `${-1.36 * S} ${-1.32 * S} ${2.72 * S} ${2.64 * S}`);
-    for (const p of [0.25, 0.5, 0.75]) node("polygon", { class: "ring", points: pts(RF.CORNER_XY.map(([x, y]) => [x * p, y * p])) }, svg);
+    const RINGS = RF.rings(M.qualified[LATEST], M.scale);
+    for (const [p] of RINGS) node("polygon", { class: "ring", points: pts(RF.CORNER_XY.map(([x, y]) => [x * p, y * p])) }, svg);
     for (const [x, y] of RF.CORNER_XY) node("line", { class: "diag", x1: 0, y1: 0, x2: x * S, y2: -y * S }, svg);
     node("polygon", { class: "frame", points: pts(RF.CORNER_XY) }, svg);
-    for (const p of [0.25, 0.5, 0.75]) {
-      node("text", { class: "tick", x: 0, y: ((-p + 0.06) * S).toFixed(1), "text-anchor": "middle" }, svg).textContent = String(p * 100);
+    for (const [p, text] of RINGS) {
+      node("text", { class: "tick", x: 0, y: ((-p + 0.06) * S).toFixed(1), "text-anchor": "middle" }, svg).textContent = text;
     }
     ORDER.forEach((c, i) => {
       const [x, y] = RF.CORNER_XY[i];
@@ -444,8 +452,7 @@ td.dim { color: var(--muted); }
       node("polygon", { class: `shape c${slots.get(keyOf(p)) + 1}`, points: pts(p.points), "data-key": keyOf(p) }, g);
     }
     if (opts.outline) {
-      const vals = ORDER.map((c) => (res.pct[c] == null ? 0 : res.pct[c] / 100));
-      node("polygon", { class: "outline", points: pts(RF.shapePoints(vals, 1)) }, svg);
+      node("polygon", { class: "outline", points: pts(RF.shapePoints(res.outline, 1)) }, svg);
     }
     const cands = colored.map((p) => {
       const tip = p.points.reduce((a, b) => (Math.hypot(b[0], b[1]) > Math.hypot(a[0], a[1]) ? b : a));
@@ -665,17 +672,36 @@ td.dim { color: var(--muted); }
   const SPOTS = 5;
   const REROLLS = 3;
   const money = (v, d = 1) => `$${(v / 1e6).toFixed(d)}M`;
+  const GAME_VERSION = 3;  // saved games from older rules start over
+  const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
   const DECK = new Map();  // team -> players with a contract, highest salary first
-  let floor = 0;  // cap kept in hand per open spot (see RF.signingFloor)
+  let BY_POS = false;      // one player per position (any order) when the deck has positions
+  const FLOORS = {};       // cap kept in hand per open spot, by position (see RF.signingFloor)
   if (GAME) {
-    for (const [pid, salary, team] of GAME.deck) {
+    const known = GAME.deck.filter((d) => POSITIONS.includes(d[3]));
+    BY_POS = known.length >= 0.9 * GAME.deck.length;  // a player with no position sits out
+    for (const [pid, salary, team, pos] of BY_POS ? known : GAME.deck) {
       const p = INDEX[GAME.stats_season].get(pid);
       if (!p) continue;
       if (!DECK.has(team)) DECK.set(team, []);
-      DECK.get(team).push({ ...p, salary, dealt: team });
+      DECK.get(team).push({ ...p, salary, dealt: team, pos: pos || p.pos });
     }
-    floor = RF.signingFloor([...DECK.values()].map((list) => list.map((p) => p.salary)));
+    const salaries = (keep) => [...DECK.values()].map((list) => list.filter(keep).map((q) => q.salary));
+    if (BY_POS) for (const pos of POSITIONS) FLOORS[pos] = RF.signingFloor(salaries((q) => q.pos === pos), SPOTS);
+    else FLOORS.any = RF.signingFloor(salaries(() => true), SPOTS);
   }
+  const slotOf = (q) => (BY_POS ? q.pos : "any");
+  /* Spots still to fill: the positions nobody has signed for yet (or plain spots without positions). */
+  const openSlots = () => (BY_POS ? POSITIONS.filter((pos) => !G.picks.some((p) => p.pos === pos))
+    : Array(SPOTS - G.picks.length).fill("any"));
+  const isOpen = (q) => openSlots().includes(slotOf(q));
+  /* What signing q must leave in hand: the floors of the other open spots. */
+  function reserveFor(q) {
+    const open = openSlots();
+    const i = open.indexOf(slotOf(q));
+    return i < 0 ? Infinity : open.reduce((t, slot, j) => t + (j === i ? 0 : FLOORS[slot]), 0);
+  }
+  const signable = (q, left) => isOpen(q) && RF.canAfford(q.salary, left, reserveFor(q));
   const DECK_TEAMS = [...DECK.keys()].sort();
   const teamName = (abbr) => ((DATA.teams[GAME.stats_season] || {})[abbr] || { name: abbr }).name;
   const todayKey = () => {
@@ -687,18 +713,23 @@ td.dim { color: var(--muted); }
   function newGame(mode) {
     const date = todayKey();
     const seed = mode === "daily" ? RF.hashSeed(`${GAME.contract_season}|${date}`) : Math.floor(Math.random() * 2 ** 32);
-    G = { mode, date, seed, draws: 0, current: null, picks: [], rerolls: REROLLS, done: false };
+    G = { v: GAME_VERSION, mode, date, seed, draws: 0, current: null, picks: [], rerolls: REROLLS, done: false };
     deal();
   }
-  /* Next team in this game's order that you haven't signed from and isn't on the table now. */
+  /* Next team in this game's order that you haven't signed from, isn't on the table now, and has
+   * someone you can sign: an open position, and a salary that leaves the other open spots' floors.
+   * Returns false if there's none. */
   function deal() {
     const order = RF.dealOrder(DECK_TEAMS, G.seed);
     const used = new Set(G.picks.map((p) => p.team));
-    for (let i = 0; i < order.length * 2; i++) {
+    const left = GAME.cap - spent();
+    const fits = (t) => (DECK.get(t) || []).some((q) => signable(q, left));
+    for (let k = 0; k < order.length; k++) {
       const t = order[G.draws % order.length];
       G.draws += 1;
-      if (!used.has(t) && t !== G.current) { G.current = t; return; }
+      if (!used.has(t) && t !== G.current && fits(t)) { G.current = t; return true; }
     }
+    return false;
   }
   const spent = () => G.picks.reduce((s, p) => s + p.salary, 0);
   const gamePlayers = () => G.picks.map((p) => INDEX[GAME.stats_season].get(p.pid));
@@ -706,26 +737,29 @@ td.dim { color: var(--muted); }
 
   function glyph(p, mine, slot) {
     const g = (vals) => RF.shapePoints(vals, 1).map(([x, y]) => `${x.toFixed(3)},${(-y).toFixed(3)}`).join(" ");
-    const vals = (q) => ORDER.map((c) => q.pct[CIDX[c]] / 100);
+    const vals = (q) => ORDER.map((c) => RF.radius(q.pct[CIDX[c]], M.qualified[q.season] || 1, M.scale));
     return `<svg class="glyph" viewBox="-1.08 -1.08 2.16 2.16" aria-hidden="true"><rect class="g-frame" x="-1" y="-1" width="2" height="2"/>`
       + mine.map((q) => `<polygon class="g-mine" points="${g(vals(q))}"/>`).join("")
       + `<polygon class="g-shape c${slot}" points="${g(vals(p))}"/></svg>`;
   }
 
+  const BEST_KEY = `rf-game-best-${M.scale || "percentile"}`;  // scores on different scales don't compare
   function bestScores() {
-    try { return JSON.parse(store.get("rf-game-best") || "{}") || {}; } catch (e) { return {}; }
+    try { return JSON.parse(store.get(BEST_KEY) || "{}") || {}; } catch (e) { return {}; }
   }
   function recordBest(score) {
     const best = bestScores();
     if (G.mode === "daily") {
       if (!best.daily || best.daily.date !== G.date || score > best.daily.score) best.daily = { date: G.date, score };
     } else if (!(best.free >= score)) best.free = score;
-    store.set("rf-game-best", JSON.stringify(best));
+    store.set(BEST_KEY, JSON.stringify(best));
   }
 
   function shareText(res) {
     const head = G.mode === "daily" ? `Daily deal ${G.date}` : "Free play";
-    const names = G.picks.map((p) => `${INDEX[GAME.stats_season].get(p.pid).name} ${money(p.salary)}`).join(" · ");
+    const byPos = (a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos);
+    const names = (BY_POS ? G.picks.slice().sort(byPos) : G.picks)
+      .map((p) => `${BY_POS ? `${p.pos} ` : ""}${INDEX[GAME.stats_season].get(p.pid).name} ${money(p.salary)}`).join(" · ");
     return `Roster Fit cap game · ${head}\nCoverage ${(res.coverage * 100).toFixed(1)}% · ${money(spent())} of ${money(GAME.cap, 2)} cap\n${names}`;
   }
 
@@ -743,27 +777,34 @@ td.dim { color: var(--muted); }
     let html = `<div class="card"><div class="budget-head"><span class="stat-label">Cap space</span><b>${money(left, 2)}</b>
         <span class="muted">left of ${money(GAME.cap, 2)}</span></div>
       <div class="budget-bar" role="img" aria-label="${money(spent())} of ${money(GAME.cap, 2)} spent">${segs}</div>
-      <div class="budget-meta"><span>${G.done ? "All five signed" : `Pick ${round} of ${SPOTS}`}</span>
-        <span class="pips" aria-label="${G.rerolls} rerolls left">Rerolls${pips}</span></div></div>`;
+      <div class="budget-meta"><span>${G.done ? "All five signed" : `Pick ${round} of ${SPOTS}${BY_POS ? ` · open: ${openSlots().join(", ")}` : ""}`}</span>
+        <span class="pips" aria-label="${G.rerolls} rerolls left">Rerolls${pips}</span></div>
+      ${BY_POS ? `<ol class="pos-strip" aria-label="Your lineup by position">${POSITIONS.map((pos) => {
+        const k = G.picks.findIndex((p) => p.pos === pos);
+        const pick = k >= 0 ? players[k] : null;
+        const last = pick ? (pick.name.split(" ").slice(1).join(" ") || pick.name) : "";
+        return `<li class="${pick ? `filled c${k + 1}` : "open"}"><b>${pos}</b><span>${pick ? esc(last) : "open"}</span></li>`;
+      }).join("")}</ol>` : ""}</div>`;
 
     if (!G.done) {
-      const spotsAfter = SPOTS - round;
       const cands = DECK.get(G.current) || [];
       const base = res.coverage;
       let any = false;
       const rows = cands.map((p) => {
-        const ok = RF.canAfford(p.salary, left, spotsAfter, floor);
+        const open = isOpen(p);
+        const ok = signable(p, left);
         any = any || ok;
         const gain = lineupOf(players.concat([p])).coverage - base;
         const corners = ORDER.map((c) => `${short(c)} ${fmtPct(p.pct[CIDX[c]])}`).join(" · ");
         const moved = p.team && !p.team.split("/").includes(G.current) ? ` · ${yy(GAME.stats_season)} with ${esc(p.team)}` : "";
-        return `<li class="cand${ok ? "" : " over"}">${glyph(p, players, round)}
-          <span class="who"><b>${esc(p.name)}</b><span class="meta">${corners}${moved}</span>${rolesOf(p) ? `<span class="meta role">${esc(rolesOf(p))}</span>` : ""}</span>
+        const label = ok ? "Sign" : open ? "Over" : "Filled";
+        return `<li class="cand${ok ? "" : open ? " over" : " taken"}">${glyph(p, players, round)}
+          <span class="who"><b>${BY_POS ? `<span class="pos-badge">${esc(p.pos)}</span>` : ""}${esc(p.name)}</b><span class="meta">${corners}${moved}</span>${rolesOf(p) ? `<span class="meta role">${esc(rolesOf(p))}</span>` : ""}</span>
           <span class="price"><b>${money(p.salary)}</b> <span class="meta">${Math.round(100 * p.salary / GAME.cap)}%</span>
             <span class="gain">+${(gain * 100).toFixed(1)} pts</span></span>
-          <button class="btn${ok ? " primary" : ""}" data-sign="${p.pid}" ${ok ? "" : "disabled"}>${ok ? "Sign" : "Over"}</button></li>`;
+          <button class="btn${ok ? " primary" : ""}" data-sign="${p.pid}" ${ok ? "" : `disabled title="${open ? "Signing him would leave too little cap for your other open spots" : `You already have a ${esc(p.pos)}`}"`}>${label}</button></li>`;
       }).join("");
-      const stuck = any ? "" : `<p class="notice">Nobody here fits: you need ${money(spotsAfter * floor)} left for the ${spotsAfter} spot${spotsAfter === 1 ? "" : "s"} after this one.
+      const stuck = any ? "" : `<p class="notice">Nobody here fits your cap space and open spots.
         <button class="btn" id="game-redeal" style="margin-left:6px">Deal another team (free)</button></p>`;
       html += `<div class="card"><div class="deal-head"><div><span class="stat-label">Pick ${round} of ${SPOTS} · you're dealt</span>
           <h2>${esc(teamName(G.current))}</h2></div>
@@ -791,8 +832,10 @@ td.dim { color: var(--muted); }
       : `<div class="stats"><div class="stat hero"><span class="stat-label">Coverage so far</span>
           <span class="stat-value">${share(res.coverage)}</span><span class="stat-note">of the square filled by your signings</span></div></div>
          <p class="muted" style="margin:0;font-size:13.5px">Depth and the team outline show once all five are signed.</p>`;
+    const posOf = new Map(G.picks.map((p) => [`${p.pid}|${GAME.stats_season}`, BY_POS ? p.pos : null]));
+    const named = { ...res, players: res.players.map((p) => ({ ...p, name: posOf.get(keyOf(p)) ? `${p.name} · ${posOf.get(keyOf(p))}` : p.name })) };
     $("game-panel").innerHTML = numbers
-      + (G.picks.length ? tableHTML(res, colors, { second: "Salary", secondValue: (p) => money(salaryOf.get(keyOf(p))) }) : "");
+      + (G.picks.length ? tableHTML(named, colors, { second: "Salary", secondValue: (p) => money(salaryOf.get(keyOf(p))) }) : "");
     const byKey = new Map(res.players.map((p) => [keyOf(p), p]));
     bindFocus($("game-svg"), $("game-panel"), $("game-hint"), (k) => describePlayer(byKey.get(k)));
     store.set("rf-game", JSON.stringify(G));
@@ -801,7 +844,9 @@ td.dim { color: var(--muted); }
   function restoreGame() {
     try {
       const g = JSON.parse(store.get("rf-game") || "null");
-      const valid = g && Array.isArray(g.picks) && g.picks.every((p) => (DECK.get(p.team) || []).some((q) => q.pid === p.pid))
+      const valid = g && g.v === GAME_VERSION && Array.isArray(g.picks)
+        && g.picks.every((p) => (DECK.get(p.team) || []).some((q) => q.pid === p.pid && (!BY_POS || q.pos === p.pos)))
+        && (!BY_POS || new Set(g.picks.map((p) => p.pos)).size === g.picks.length)
         && DECK.has(g.current) && (g.mode === "free" || g.date === todayKey());
       if (valid) { G = g; return; }
     } catch (e) { /* ignore */ }
@@ -810,12 +855,16 @@ td.dim { color: var(--muted); }
 
   if (GAME) {
     $("tab-game").hidden = false;
-    $("game-rules").textContent = `Five rounds. Each round deals you one team's ${GAME.contract_season} roster: sign one player from it. `
+    $("game-rules").textContent = (BY_POS
+      ? `Sign a starting five, one player per position (PG, SG, SF, PF, C), in any order. Each round deals you a team's `
+        + `${GAME.contract_season} roster: sign anyone at a position you haven't filled. `
+      : `Five rounds. Each round deals you one team's ${GAME.contract_season} roster: sign one player from it. `)
       + `Stay under the ${money(GAME.cap, 2)} salary cap; you get ${REROLLS} rerolls a game. Score: how much of the square your five fill. `
       + `The daily deal is the same for everyone today.`;
     $("game-foot").innerHTML = `Salaries: ${esc(GAME.contract_season)} contracts from <a href="${esc(GAME.source_url)}" target="_blank" rel="noopener">${esc(GAME.source)}</a>. `
       + `Shapes: ${esc(GAME.stats_season)} stats for players with ${mins(GAME.min_minutes)}+ minutes, so rookies and anyone who missed the season aren't in the deck. `
-      + `Cap: ${money(GAME.cap, 3)}, the NBA's ${esc(GAME.contract_season)} salary cap.`;
+      + `Cap: ${money(GAME.cap, 3)}, the NBA's ${esc(GAME.contract_season)} salary cap.`
+      + (BY_POS ? ` Positions: each player's ${esc(GAME.stats_season)} position in LEBRON.` : "");
     $("game-mode-daily").addEventListener("click", () => { if (G.mode !== "daily") { newGame("daily"); renderGame(); } });
     $("game-mode-free").addEventListener("click", () => { if (G.mode !== "free") { newGame("free"); renderGame(); } });
     $("game-new").addEventListener("click", () => { newGame(G.mode); renderGame(); });
@@ -824,15 +873,14 @@ td.dim { color: var(--muted); }
       if (!b || G == null) return;
       if (b.dataset.sign) {
         const p = (DECK.get(G.current) || []).find((q) => q.pid === Number(b.dataset.sign));
-        if (!p || !RF.canAfford(p.salary, GAME.cap - spent(), SPOTS - G.picks.length - 1, floor)) return;
-        G.picks.push({ pid: p.pid, salary: p.salary, team: G.current });
+        if (!p || !signable(p, GAME.cap - spent())) return;
+        G.picks.push({ pid: p.pid, salary: p.salary, team: G.current, pos: p.pos });
         if (G.picks.length >= SPOTS) {
           G.done = true;
           recordBest(lineupOf(gamePlayers()).coverage);
         } else deal();
       } else if (b.id === "game-reroll" && G.rerolls > 0) {
-        G.rerolls -= 1;
-        deal();
+        if (deal()) G.rerolls -= 1;  // no other team fits: keep the reroll
       } else if (b.id === "game-redeal") {
         deal();
       } else if (b.id === "game-again") {
@@ -894,7 +942,8 @@ td.dim { color: var(--muted); }
   // glossary + sources
   const gloss = [
     ["Corners", ORDER.map((c) => `${M.labels[c]} (${M.descriptions[c]})`).join("; ") + "."],
-    ["Player shape", `Each corner is the player's percentile among qualified players that season (${M.min_gp}+ games, ${M.min_mpg}+ minutes a game). On team charts, a shape's area grows with minutes played.`],
+    ["Player shape", `Each corner comes from the player's percentile among qualified players that season (${M.min_gp}+ games, ${M.min_mpg}+ minutes a game)${M.scale === "rank" ? ", placed on the rank scale below" : ""}. On team charts, a shape's area grows with minutes played.`],
+    ...(M.scale === "rank" ? [["Scale", "Distance along each diagonal follows rank, not percentile. The best player in a corner reaches it, and every time your rank halves (20th to 10th to 5th), you move the same step outward: about 12% of the way among ~330 qualified players. So the 4th-best sits at 76%, the 20th-best at 48%, a median player at 12%: the top of the league stands apart the way it does on the court. The rings mark the top 5, 20 and 50. Team outlines use the same scale against all team-seasons."]] : []),
     ["Coverage", "How much of the square the players' shapes fill together: does anyone on the team cover each part of it?"],
     ["Depth", "The black outline: how much of each corner the whole rotation provides, weighted by minutes and ranked against every team-season in the data."],
     ["Overlap", "Shape area that two or more players share. Big overlap means players doing the same job."],

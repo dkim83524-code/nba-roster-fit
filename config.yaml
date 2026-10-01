@@ -72,6 +72,7 @@ impact:                              # offense and defense corners: blends of pl
         season: ["season"]
         off_role: ["offrole", "off_role"]
         def_role: ["defrole", "def_role"]
+        position: ["pos", "position"]     # PG/SG/SF/PF/C: the cap game's position rounds
       numeric_season_is_end_year: true
       defense_higher_is_better: true
       name_overrides: {}
@@ -117,6 +118,10 @@ playoffs:
 
 drawing:
   theme: "light"                     # light | dark
+  # How far along the diagonal a percentile reaches. rank: the best player in a corner reaches it and
+  # every time the rank halves (20th -> 10th -> 5th) the vertex moves the same step outward (4th-best
+  # 76% of the way, 20th-best 48%, median 12%), so the top of the league stands apart. percentile: pct / 100.
+  scale: "rank"
   minutes_scaling: "area"            # area: shape area proportional to minutes vs the team's leader; none
   team_outline: true                 # draw the black team outline (depth); --no-outline hides it
   min_minutes_to_draw: 100
