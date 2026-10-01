@@ -5,6 +5,10 @@
     python -m rosterfit plot --team NYK             # chart + CSV for one team, default season
     python -m rosterfit plot --team NYK --playoffs  # top-8 playoff rotation
     python -m rosterfit demo                        # synthetic league, no network needed
+    python -m rosterfit browser-script              # if fetch can't connect: download from your browser
+
+Files saved into data/manual/nba/ (NBA.com) and data/manual/darko/ (DARKO) are picked up by
+check and plot automatically.
 """
 from __future__ import annotations
 
@@ -17,6 +21,7 @@ from pathlib import Path
 from .cache import Cache
 from .config import Config, load_config
 from .seasons import PLAYOFFS, REGULAR, parse_season_arg
+from .sources.manual_nba import browser_script, download_jobs, import_manual
 from .sources.nba_stats import TABLES, NBAStatsFetcher, available
 from .team import PLAYOFF_MODE, REGULAR_MODE, TeamResult, build_league, evaluate_team, summary_table
 
@@ -30,10 +35,18 @@ def _seasons(cfg: Config, arg: str | None) -> list[str]:
     return seasons if cfg.seasons.target in seasons else seasons + [cfg.seasons.target]
 
 
+def _open_cache(cfg: Config) -> Cache:
+    """The local cache, after copying in anything saved by hand under fetch.manual_dir."""
+    cache = Cache(cfg.path(cfg.fetch.cache_dir))
+    for line in import_manual(cfg.path(cfg.fetch.manual_dir), cache):
+        print(line)
+    return cache
+
+
 def cmd_fetch(cfg: Config, args) -> int:
     from .metrics.players import required_tables
 
-    cache = Cache(cfg.path(cfg.fetch.cache_dir))
+    cache = _open_cache(cfg)
     fetcher = NBAStatsFetcher(cache, cfg.fetch.sleep_seconds, cfg.fetch.timeout, cfg.fetch.retries)
     tables = args.tables.split(",") if args.tables else required_tables(cfg)
     for season in _seasons(cfg, args.seasons):
@@ -49,6 +62,8 @@ def cmd_fetch(cfg: Config, args) -> int:
                     df = fetcher.fetch(table, season, season_type, refresh=args.refresh)
                 except RuntimeError as err:
                     print(f"\nFAILED {season} {table} ({season_type}): {err}", file=sys.stderr)
+                    print("\nIf this keeps failing, download from your browser instead:\n"
+                          "  python -m rosterfit browser-script", file=sys.stderr)
                     return 2
                 print(f"  {season} {table:<12} {season_type:<15} {len(df):>6} rows")
     print(f"\nCached under {cache.root}")
@@ -58,7 +73,7 @@ def cmd_fetch(cfg: Config, args) -> int:
 def cmd_check(cfg: Config, args) -> int:
     from .metrics.players import required_tables
 
-    cache = Cache(cfg.path(cfg.fetch.cache_dir))
+    cache = _open_cache(cfg)
     seasons = _seasons(cfg, args.seasons)
     need = required_tables(cfg)
     print(f"Required tables: {', '.join(need)}  (+ playoff game logs for --playoffs)")
@@ -136,7 +151,7 @@ def _render(result: TeamResult, cfg: Config, out: Path | None, theme: str | None
 
 def cmd_plot(cfg: Config, args) -> int:
     season = args.season or cfg.seasons.target
-    cache = Cache(cfg.path(cfg.fetch.cache_dir))
+    cache = _open_cache(cfg)
     seasons = sorted(set(cfg.window_seasons) | {season})
     league = build_league(cfg, cache, seasons)
     mode = PLAYOFF_MODE if args.playoffs else REGULAR_MODE
@@ -147,6 +162,31 @@ def cmd_plot(cfg: Config, args) -> int:
         return 2
     print(describe(result, cfg))
     _render(result, cfg, Path(args.out) if args.out else None, args.theme)
+    return 0
+
+
+def cmd_browser_script(cfg: Config, args) -> int:
+    from .metrics.players import required_tables
+
+    cache = _open_cache(cfg)
+    tables = args.tables.split(",") if args.tables else required_tables(cfg)
+    jobs = download_jobs(tables, _seasons(cfg, args.seasons), None if args.all else cache)
+    if not jobs:
+        print("Everything the config needs is already cached; nothing to download.")
+        return 0
+    out = Path(args.out) if args.out else cfg.path(cfg.fetch.manual_dir) / "download_nba_stats.js"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(browser_script(jobs))
+    minutes = len(jobs) * 3 / 60  # pause + response time; game logs are several MB each
+    print(f"""Wrote {out} ({len(jobs)} requests, roughly {max(1, round(minutes))} min).
+
+1. Open https://www.nba.com/stats in Chrome, Edge or Firefox.
+2. Open the console: Cmd+Option+J (Mac) or Ctrl+Shift+J (Windows).
+   Chrome may ask you to type "allow pasting" first.
+3. Paste the whole contents of {out.name} and press Enter. Stay on the tab until it says Done,
+   and allow multiple downloads if asked.
+4. Move the downloaded nba_stats_<season>.json files into {cfg.path(cfg.fetch.manual_dir)}
+5. Run: python -m rosterfit check""")
     return 0
 
 
@@ -181,6 +221,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--tables", help=f"comma list from: {', '.join(TABLES)} (default: what the config needs)")
     p.add_argument("--refresh", action="store_true", help="redownload even if cached")
     p.set_defaults(func=cmd_fetch)
+
+    p = sub.add_parser("browser-script",
+                       help="write a script that downloads the NBA.com tables from your browser")
+    p.add_argument("--seasons", help="'2025-26' or '2017-18:2025-26' (default: the window + target)")
+    p.add_argument("--tables", help="comma list (default: what the config needs)")
+    p.add_argument("--all", action="store_true", help="include tables that are already cached")
+    p.add_argument("--out", help="where to write the script")
+    p.set_defaults(func=cmd_browser_script)
 
     p = sub.add_parser("check", help="report cached tables, impact CSVs and the team pool")
     p.add_argument("--seasons")

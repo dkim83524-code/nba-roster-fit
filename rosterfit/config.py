@@ -97,6 +97,7 @@ class DrawingCfg:
 @dataclass
 class FetchCfg:
     cache_dir: str = "data/cache"
+    manual_dir: str = "data/manual/nba"
     sleep_seconds: float = 1.0
     timeout: int = 60
     retries: int = 3
