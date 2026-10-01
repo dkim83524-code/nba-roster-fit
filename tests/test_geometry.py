@@ -64,3 +64,16 @@ def test_union_of_shapes_in_different_corners():
 def test_missing_value_is_rejected():
     with pytest.raises(ValueError):
         geometry.area_fraction(vals(0.5, float("nan"), 0.5, 0.5), ORDER)
+
+
+def test_labels_for_corner_points_stay_inside_the_drawing():
+    from rosterfit.plot import _place_labels
+
+    # a long name on a point in the bottom-left corner, plus crowding near it
+    candidates = [("Victor Wembanyama", (-0.97, -0.97)), ("Luke Kornet", (-0.6, -0.62)),
+                  ("Devin Vassell", (-0.85, 0.85)), ("Stephon Castle", (0.99, 0.99))]
+    for name, _, (lx, ly, ha) in _place_labels(candidates):
+        width = 0.021 * len(name) + 0.01
+        left = lx if ha == "left" else lx - width
+        assert -1.17 - 1e-9 <= left and left + width <= 1.17 + 1e-9, name
+        assert -1.0 - 1e-9 <= ly - 0.0275 and ly + 0.0275 <= 1.0 + 1e-9, name
