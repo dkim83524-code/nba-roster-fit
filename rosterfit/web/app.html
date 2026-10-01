@@ -63,6 +63,10 @@ button, select, input { font: inherit; color: inherit; }
 .tab:hover { color: var(--ink); }
 .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
 @media (max-width: 480px) { .top { gap: 8px 20px; } .tabs { flex-wrap: nowrap; gap: 0; max-width: 100%; overflow-x: auto; } .tab { padding: 6px 8px 5px; font-size: 16.5px; white-space: nowrap; } }
+.scale-switch { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.scale-switch > span { font: 600 12px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.scale-switch .seg-btn { padding: 6px 11px; }
+@media (max-width: 480px) { .scale-switch { margin-left: 0; } }
 .notice { margin-top: 12px; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: 14px; }
 
 /* controls */
@@ -246,6 +250,13 @@ td.dim { color: var(--muted); }
       <button class="tab" role="tab" id="tab-builder" aria-controls="view-builder" aria-selected="false">Builder</button>
       <button class="tab" role="tab" id="tab-game" aria-controls="view-game" aria-selected="false" hidden>Cap game</button>
     </nav>
+    <div class="scale-switch">
+      <span id="scale-label">Scale</span>
+      <div class="seg" role="group" aria-labelledby="scale-label">
+        <button class="seg-btn" id="scale-percentile" aria-pressed="false" title="Vertex at the player's percentile: best for judging how good a team is">Percentile</button>
+        <button class="seg-btn" id="scale-rank" aria-pressed="false" title="Vertex by rank: superstars stand out and team structure is obvious">Rank</button>
+      </div>
+    </div>
   </header>
   <p class="notice" id="synthetic-notice" hidden>Preview with a made-up league: the teams, names and numbers aren't real.</p>
 
@@ -743,16 +754,16 @@ td.dim { color: var(--muted); }
       + `<polygon class="g-shape c${slot}" points="${g(vals(p))}"/></svg>`;
   }
 
-  const BEST_KEY = `rf-game-best-${M.scale || "percentile"}`;  // scores on different scales don't compare
+  const bestKey = () => `rf-game-best-${M.scale || "percentile"}`;  // scores on different scales don't compare
   function bestScores() {
-    try { return JSON.parse(store.get(BEST_KEY) || "{}") || {}; } catch (e) { return {}; }
+    try { return JSON.parse(store.get(bestKey()) || "{}") || {}; } catch (e) { return {}; }
   }
   function recordBest(score) {
     const best = bestScores();
     if (G.mode === "daily") {
       if (!best.daily || best.daily.date !== G.date || score > best.daily.score) best.daily = { date: G.date, score };
     } else if (!(best.free >= score)) best.free = score;
-    store.set(BEST_KEY, JSON.stringify(best));
+    store.set(bestKey(), JSON.stringify(best));
   }
 
   function shareText(res) {
@@ -760,7 +771,7 @@ td.dim { color: var(--muted); }
     const byPos = (a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos);
     const names = (BY_POS ? G.picks.slice().sort(byPos) : G.picks)
       .map((p) => `${BY_POS ? `${p.pos} ` : ""}${INDEX[GAME.stats_season].get(p.pid).name} ${money(p.salary)}`).join(" · ");
-    return `Roster Fit cap game · ${head}\nCoverage ${(res.coverage * 100).toFixed(1)}% · ${money(spent())} of ${money(GAME.cap, 2)} cap\n${names}`;
+    return `Roster Fit cap game · ${head}\nCoverage ${(res.coverage * 100).toFixed(1)}% (${M.scale} scale) · ${money(spent())} of ${money(GAME.cap, 2)} cap\n${names}`;
   }
 
   function renderGame() {
@@ -813,11 +824,11 @@ td.dim { color: var(--muted); }
     } else {
       const best = bestScores();
       const bestLine = G.mode === "daily"
-        ? (best.daily && best.daily.date === G.date ? `Your best today: ${(best.daily.score * 100).toFixed(1)}%` : "")
-        : (best.free != null ? `Your best in free play: ${(best.free * 100).toFixed(1)}%` : "");
+        ? (best.daily && best.daily.date === G.date ? `Your best today on this scale: ${(best.daily.score * 100).toFixed(1)}%` : "")
+        : (best.free != null ? `Your best in free play on this scale: ${(best.free * 100).toFixed(1)}%` : "");
       html += `<div class="card"><span class="stat-label">${G.mode === "daily" ? `Daily deal · ${esc(G.date)}` : "Free play"} · final</span>
         <div class="final">${(res.coverage * 100).toFixed(1)}%</div>
-        <p style="margin:2px 0 8px">coverage, with ${money(spent())} of the ${money(GAME.cap, 2)} cap. ${esc(bestLine)}</p>
+        <p style="margin:2px 0 8px">coverage on the ${esc(M.scale)} scale, with ${money(spent())} of the ${money(GAME.cap, 2)} cap. ${esc(bestLine)}</p>
         <div class="row"><button class="btn primary" id="game-copy">Copy result</button><button class="btn" id="game-again">Play again</button></div>
         <textarea class="share-text" id="game-share" readonly hidden></textarea></div>`;
     }
@@ -940,24 +951,27 @@ td.dim { color: var(--muted); }
   $("builder-clear").addEventListener("click", () => { lineup = []; renderBuilder(); });
 
   // glossary + sources
-  const gloss = [
-    ["Corners", ORDER.map((c) => `${M.labels[c]} (${M.descriptions[c]})`).join("; ") + "."],
-    ["Player shape", `Each corner comes from the player's percentile among qualified players that season (${M.min_gp}+ games, ${M.min_mpg}+ minutes a game)${M.scale === "rank" ? ", placed on the rank scale below" : ""}. On team charts, a shape's area grows with minutes played.`],
-    ...(M.scale === "rank" ? [["Scale", "Distance along each diagonal follows rank, not percentile. The best player in a corner reaches it, and every time your rank halves (20th to 10th to 5th), you move the same step outward: about 12% of the way among ~330 qualified players. So the 4th-best sits at 76%, the 20th-best at 48%, a median player at 12%: the top of the league stands apart the way it does on the court. The rings mark the top 5, 20 and 50. Team outlines use the same scale against all team-seasons."]] : []),
-    ["Coverage", "How much of the square the players' shapes fill together: does anyone on the team cover each part of it?"],
-    ["Depth", "The black outline: how much of each corner the whole rotation provides, weighted by minutes and ranked against every team-season in the data."],
-    ["Overlap", "Shape area that two or more players share. Big overlap means players doing the same job."],
-    ["Surplus above cap", "In Sets up others and Fits next to stars, more stops counting once a team is in the top 20%. The extra is shown in players' worth."],
-  ];
   const SOURCES = M.impact_sources || [{ name: M.impact_source, url: "https://www.darko.app", offense: 1, defense: 1 }];
-  if (SOURCES.length > 1) {
-    const mix = (side) => SOURCES.filter((x) => x[side] > 0).map((x) => `${x.name} ${Math.round(100 * x[side] / SOURCES.reduce((t, y) => t + y[side], 0))}%`).join(" + ");
-    gloss.push([`${M.labels.offense} and ${M.labels.defense}`, `Blends of plus-minus metrics, each standardized among the season's qualified players: offense ${mix("offense")}, defense ${mix("defense")}. The weighting follows Crafted NBA's defensive blend.`]);
+  function renderGlossary() {
+    const gloss = [
+      ["Corners", ORDER.map((c) => `${M.labels[c]} (${M.descriptions[c]})`).join("; ") + "."],
+      ["Player shape", `Each corner comes from the player's percentile among qualified players that season (${M.min_gp}+ games, ${M.min_mpg}+ minutes a game), placed on the scale chosen at the top of the page. On team charts, a shape's area grows with minutes played.`],
+      ["Scale: percentile", `A vertex sits at the player's percentile: the 90th percentile is 90% of the way to the corner. Solid all-around players get big shapes, which makes this the better view for judging how good a team is overall.${M.scale === "percentile" ? " (Showing now.)" : ""}`],
+      ["Scale: rank", `Distance follows rank instead. The best player in a corner reaches it, and every time your rank halves (20th to 10th to 5th), you move the same step outward: about 12% of the way among ~330 qualified players. The 4th-best sits at 76%, the 20th-best at 48%, a median player at 12%, so superstars pop out and a team's structure is obvious. Rings mark the top 5, 20 and 50.${M.scale === "rank" ? " (Showing now.)" : ""}`],
+      ["Coverage", "How much of the square the players' shapes fill together: does anyone on the team cover each part of it?"],
+      ["Depth", "The black outline: how much of each corner the whole rotation provides, weighted by minutes and ranked against every team-season in the data."],
+      ["Overlap", "Shape area that two or more players share. Big overlap means players doing the same job."],
+      ["Surplus above cap", "In Sets up others and Fits next to stars, more stops counting once a team is in the top 20%. The extra is shown in players' worth."],
+    ];
+    if (SOURCES.length > 1) {
+      const mix = (side) => SOURCES.filter((x) => x[side] > 0).map((x) => `${x.name} ${Math.round(100 * x[side] / SOURCES.reduce((t, y) => t + y[side], 0))}%`).join(" + ");
+      gloss.push([`${M.labels.offense} and ${M.labels.defense}`, `Blends of plus-minus metrics, each standardized among the season's qualified players: offense ${mix("offense")}, defense ${mix("defense")}. The weighting follows Crafted NBA's defensive blend.`]);
+    }
+    if ([...INDEX[LATEST].values()].some((p) => p.defRole)) {
+      gloss.push(["Roles", "Offensive and defensive role labels from BBall Index's LEBRON database, shown when you hover a player."]);
+    }
+    $("glossary").innerHTML = gloss.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("");
   }
-  if ([...INDEX[LATEST].values()].some((p) => p.defRole)) {
-    gloss.push(["Roles", "Offensive and defensive role labels from BBall Index's LEBRON database, shown when you hover a player."]);
-  }
-  $("glossary").innerHTML = gloss.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("");
   const srcLinks = SOURCES.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name === "LEBRON" ? "LEBRON (BBall Index)" : x.name)}</a>`).join(" and ");
   const crafted = SOURCES.length > 1 ? `, blended as in <a href="https://craftednba.com" target="_blank" rel="noopener">Crafted NBA</a>'s defensive formula` : "";
   $("sources").innerHTML = `Data: player stats from <a href="https://www.nba.com/stats" target="_blank" rel="noopener">NBA.com</a> via nba_api; offense and defense from ${srcLinks}${crafted}${GAME ? `; contracts from <a href="${esc(GAME.source_url)}" target="_blank" rel="noopener">${esc(GAME.source)}</a>` : ""}. Seasons ${esc(SEASONS[0])} to ${esc(LATEST)}, built ${esc(M.generated)}. A personal project, not affiliated with the NBA.`;
@@ -983,6 +997,24 @@ td.dim { color: var(--muted); }
   if (!lineup.length) loadTeamTop5(LATEST, T.team);
   fillSelect($("builder-season"), seasonItems(), LATEST);
   fillSelect($("builder-team"), teamItems(LATEST), T.team);
+
+  const SCALES = ["percentile", "rank"];
+  function setScale(scale) {
+    M.scale = scale;  // RF.evaluate, RF.rings and the glyphs all read it
+    for (const s of SCALES) $(`scale-${s}`).setAttribute("aria-pressed", String(s === scale));
+  }
+  const savedScale = store.get("rf-scale");
+  setScale(SCALES.includes(savedScale) ? savedScale : SCALES.includes(M.scale) ? M.scale : "percentile");
+  for (const s of SCALES) {
+    $(`scale-${s}`).addEventListener("click", () => {
+      if (M.scale === s) return;
+      setScale(s);
+      store.set("rf-scale", s);
+      renderTeams(); renderCompare(); renderBuilder(); renderGlossary();
+      if (GAME) renderGame();
+    });
+  }
+  renderGlossary();
 
   renderTeams();
   renderCompare();

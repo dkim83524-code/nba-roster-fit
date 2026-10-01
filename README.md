@@ -32,6 +32,10 @@ about 12% of the way. The 4th-best sits at 76%, the 20th-best at 48%, a median p
 superstars' shapes dwarf an all-around role player's. Team outlines use the same scale against all
 team-seasons. `scale: "percentile"` puts the vertex at percentile / 100 instead.
 
+The website has a **Scale** switch at the top for both: percentile is the better view for judging
+how good a team is overall, rank for seeing its stars and structure. `drawing.scale` sets which one
+the page opens with (and what the PNG charts use); each viewer's choice is remembered.
+
 **Corner order matters.** Only neighboring corners multiply in a shape's area:
 `area = (offense + portability) × (playmaking + defense) / 4`. This order rewards two-way
 players (offense next to defense), scorer-creators (offense next to playmaking) and 3-and-D glue
