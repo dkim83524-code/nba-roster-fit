@@ -141,7 +141,7 @@ def cmd_check(cfg: Config, args) -> int:
     cache = _open_cache(cfg)
     seasons = _seasons(cfg, args.seasons)
     need = required_tables(cfg)
-    print(f"Required tables: {', '.join(need)}  (+ playoff game logs for --playoffs)")
+    print(f"Required tables: {', '.join(need)}  (regular season and playoffs)")
     print(f"{'season':<9}" + "".join(f"{t:<13}" for t in need) + "playoffs     impact")
     league = build_league(cfg, cache, seasons)
     reports = league.impact_reports
@@ -152,10 +152,15 @@ def cmd_check(cfg: Config, args) -> int:
                 cells.append("n/a")
             else:
                 cells.append("ok" if cache.has(season, REGULAR, t) else "MISSING")
-        po = "ok" if cache.has(season, PLAYOFFS, "gamelog") else "-"
+        po_tables = [t for t in need if PLAYOFFS in TABLES[t].season_types and available(t, season)]
+        po_have = [t for t in po_tables if cache.has(season, PLAYOFFS, t)]
+        po = ("-" if "gamelog" not in po_have else "ok" if len(po_have) == len(po_tables)
+              else f"{len(po_have)}/{len(po_tables)} tables")
         lacking = [n for n, r in reports.items() if season not in r.seasons]
         imp = "ok" if not lacking else "MISSING " + ", ".join(lacking)
         print(f"{season:<9}" + "".join(f"{c:<13}" for c in cells) + f"{po:<13}{imp}")
+    print("(table columns are the regular season; 'playoffs' counts the same tables for the playoffs, "
+          "and `browser-script` downloads any that are missing)")
     weights = {c: cfg.impact.weights_for(c) for c in ("offense", "defense")}
     print("\nOffense and defense blend: " + "; ".join(
         f"{c} " + " + ".join(f"{n} x{w:g}" for n, w in ws.items() if w > 0) for c, ws in weights.items()))

@@ -103,3 +103,17 @@ def test_browser_script_is_valid_javascript(tmp_path):
     path = tmp_path / "dl.js"
     path.write_text(browser_script(jobs))
     subprocess.run(["node", "--check", str(path)], check=True)
+
+
+def test_download_jobs_cover_playoff_tracking_tables(tmp_path):
+    from rosterfit.cache import Cache
+    from rosterfit.seasons import PLAYOFFS, REGULAR
+    from rosterfit.sources.manual_nba import download_jobs
+
+    cache = Cache(tmp_path / "cache")
+    jobs = download_jobs(["passing", "matchups"], ["2025-26"], cache)
+    assert {(j["table"], j["season_type"]) for j in jobs} == {
+        ("passing", REGULAR), ("passing", PLAYOFFS), ("matchups", REGULAR), ("matchups", PLAYOFFS)}
+    import pandas as pd
+    cache.write(pd.DataFrame({"PLAYER_ID": [1]}), "2025-26", REGULAR, "passing")  # cached: not asked for again
+    assert ("passing", REGULAR) not in {(j["table"], j["season_type"]) for j in download_jobs(["passing"], ["2025-26"], cache)}

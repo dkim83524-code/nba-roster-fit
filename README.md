@@ -122,7 +122,8 @@ each response is from (or name the file like `passing_2025-26.json`). Per-game d
 converted back to season totals.
 
 Anything in `data/manual/nba/` is copied into the cache every time you run `check`, `plot` or
-`fetch`, so there's no separate import step.
+`fetch`, so there's no separate import step. The script also asks for the playoff versions of the
+tracking tables; `check` shows how many of them each season has under "playoffs".
 
 **2. DARKO CSVs. Download these by hand; nothing scrapes darko.app.** Use the CSV download on
 darko.app's leaderboard and save one file per season into `data/manual/darko/`, for example
@@ -181,8 +182,9 @@ It has three tools:
 - **Lineup builder:** pick five players from any season. Each plays equal starter minutes, and the
   page scores the lineup with the same math as the Python package.
 
-- **Cap game:** five rounds; each deals you one team's roster and you sign one player, staying under
-  the real salary cap with 3 rerolls a game. Score: how much of the square your five fill. The daily
+- **Cap game:** five rounds; each deals you one team's roster and you sign one player at a position
+  you haven't filled (PG, SG, SF, PF, C, in any order), staying under the real salary cap with 3
+  rerolls a game. Score: how much of the square your five fill. The daily
   deal is the same for everyone that day, so friends can compare.
 
 The cap game needs this season's contracts. On
