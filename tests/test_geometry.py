@@ -77,3 +77,15 @@ def test_labels_for_corner_points_stay_inside_the_drawing():
         left = lx if ha == "left" else lx - width
         assert -1.17 - 1e-9 <= left and left + width <= 1.17 + 1e-9, name
         assert -1.0 - 1e-9 <= ly - 0.0275 and ly + 0.0275 <= 1.0 + 1e-9, name
+
+
+def test_labels_keep_clear_of_other_players_dots():
+    from rosterfit.plot import _place_labels
+
+    # Hayes Pike's dot sits where Finn Alder's first-choice label would go
+    candidates = [("Finn Alder", (0.45, -0.58)), ("Hayes Pike", (0.55, -0.63))]
+    lx, ly, ha = _place_labels(candidates)[0][2]
+    width, half_h, dot = 0.021 * len("Finn Alder") + 0.01, 0.0275, 0.025
+    left = lx if ha == "left" else lx - width
+    dx, dy = candidates[1][1]
+    assert left > dx + dot or left + width < dx - dot or ly - half_h > dy + dot or ly + half_h < dy - dot

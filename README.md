@@ -155,6 +155,26 @@ The comparison puts both squares side by side, with coverage, combined shape are
 redundancy between them. Underneath are each team's player table and the four team corner
 percentiles on one scale.
 
+## The website
+
+```bash
+python -m rosterfit export-web          # your cached data -> outputs/web/
+python -m rosterfit export-web --demo   # made-up league, no downloads needed
+```
+
+This writes `outputs/web/roster-fit-lab.html`, one self-contained page you can open in a browser.
+It has three tools:
+
+- **Teams:** any team-season in the window, full regular-season rotation or playoff top 8.
+- **Compare:** two team-seasons side by side, with coverage, depth and overlap in one table.
+- **Lineup builder:** pick five players from any season. Each plays equal starter minutes, and the
+  page scores the lineup with the same math as the Python package.
+
+`rosterfit/web/core.js` repeats the team math for the browser, and `tests/test_web.py` checks it
+against `team.py` on every team in the synthetic league. The page and `roster-fit-data.json`
+contain NBA.com and DARKO numbers, so `outputs/` stays git-ignored: share the page privately, and
+don't commit it to this public repo.
+
 ## Configuration
 
 Every weight, cap, threshold, corner order, label and season window lives in
@@ -195,7 +215,8 @@ rosterfit/
   plot.py             matplotlib chart
   synthetic.py        made-up league for the demo and tests
   explain.py          ingredient breakdown behind playmaking and portability
-  cli.py              fetch | browser-script | check | plot | compare | explain | demo
+  web/                the website: app.html (page), core.js (browser math), __init__.py (export)
+  cli.py              fetch | browser-script | check | plot | compare | explain | demo | export-web
 ```
 
 ## Next

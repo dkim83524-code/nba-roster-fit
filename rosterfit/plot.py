@@ -76,9 +76,14 @@ def _char_width(ax, fontsize: float) -> float:
     return 0.0075 * fontsize / (width_in / span)
 
 
-def _place_labels(candidates, char_w=0.021, h=0.055):
-    """Greedy label placement: for each label try a few spots and keep the first that doesn't collide."""
+def _place_labels(candidates, char_w=0.021, h=0.055, dot=0.025):
+    """Greedy label placement: for each label try a few spots and keep the first that collides with
+    nothing (earlier labels, other players' dots, the drawing's edge)."""
     placed = []
+    dots = [(x - dot, y - dot, x + dot, y + dot) for _, (x, y) in candidates]
+
+    def overlaps(b, o):
+        return not (b[2] < o[0] or b[0] > o[2] or b[3] < o[1] or b[1] > o[3])
 
     def box(x, y, w, ha):
         x0 = x if ha == "left" else x - w
@@ -87,10 +92,11 @@ def _place_labels(candidates, char_w=0.021, h=0.055):
     def hits(b):
         if b[0] < -1.17 or b[2] > 1.17 or b[1] < -1.0 or b[3] > 1.0:
             return True
-        return any(not (b[2] < o[0] or b[0] > o[2] or b[3] < o[1] or b[1] > o[3]) for o in placed)
+        return (any(overlaps(b, o) for o in placed)
+                or any(overlaps(b, o) for j, o in enumerate(dots) if j != current))
 
     out = []
-    for name, (vx, vy) in candidates:
+    for current, (name, (vx, vy)) in enumerate(candidates):
         w = char_w * len(name) + 0.01
         direction = np.array([vx, vy]) / (np.hypot(vx, vy) or 1)
         chosen = None
