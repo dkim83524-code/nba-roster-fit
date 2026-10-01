@@ -49,19 +49,21 @@ class ImpactCfg:
     numeric_season_is_end_year: bool = True
     defense_higher_is_better: bool = True
     defense_multi_year: MultiYearCfg = field(default_factory=MultiYearCfg)
-    name_overrides: dict[str, int] = field(default_factory=dict)
+    name_overrides: dict[str, int | str] = field(default_factory=dict)
 
 
 @dataclass
 class PlaymakingCfg:
     weights: dict[str, float] = field(default_factory=dict)
     min_weight_present: float = 0.5
+    component_scaling: str = "z"
 
 
 @dataclass
 class PortabilityCfg:
     weights: dict[str, float] = field(default_factory=dict)
     min_weight_present: float = 0.5
+    component_scaling: str = "z"
     cs3_pct_prior_attempts: float = 50
     versatility_min_partial_poss: float = 300
 
@@ -88,6 +90,7 @@ class PlayoffsCfg:
 class DrawingCfg:
     theme: str = "light"
     minutes_scaling: str = "area"
+    team_outline: bool = True
     min_minutes_to_draw: float = 100
     max_colored_players: int = 8
     fill_alpha: float = 0.16
@@ -170,16 +173,40 @@ def validate(cfg: Config) -> None:
     if not 0 < cfg.team.cap_pool_percentile <= 100:
         raise ValueError("team.cap_pool_percentile must be in (0, 100]")
     for section in (cfg.playmaking, cfg.portability):
+        if section.component_scaling not in ("z", "rank"):
+            raise ValueError("component_scaling must be 'z' or 'rank'")
         if any(w < 0 for w in section.weights.values()):
             raise ValueError("component weights must be >= 0 (orientation is handled in code)")
         if sum(section.weights.values()) <= 0:
             raise ValueError("at least one component weight must be > 0")
 
 
+def _merge(base: dict, extra: dict) -> dict:
+    """Recursively overlay `extra` on `base` (mappings merge, everything else replaces)."""
+    out = dict(base)
+    for key, value in extra.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def local_path(path: str | Path) -> Path:
+    """config.yaml -> config.local.yaml: personal settings that git pull never touches."""
+    path = Path(path)
+    return path.with_name(f"{path.stem}.local{path.suffix}")
+
+
 def load_config(path: str | Path = "config.yaml") -> Config:
+    """Read config.yaml, then overlay config.local.yaml next to it if that file exists."""
     path = Path(path)
     with open(path) as fh:
         raw = yaml.safe_load(fh) or {}
+    local = local_path(path)
+    if local.exists():
+        with open(local) as fh:
+            raw = _merge(raw, yaml.safe_load(fh) or {})
     cfg = _build(Config, raw, "")
     cfg.base_dir = path.resolve().parent
     validate(cfg)

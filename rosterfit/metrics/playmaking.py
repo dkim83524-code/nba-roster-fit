@@ -21,8 +21,9 @@ def playmaking_components(players: pd.DataFrame, passing: pd.DataFrame | None) -
     out = pd.DataFrame(index=players.index)
     poss = players["POSS"]
     if passing is not None and len(passing):
-        pot = pick(players, passing, "POTENTIAL_AST")
-        created = pick(players, passing, first_column(passing, ["AST_PTS_CREATED", "AST_POINTS_CREATED"]))
+        # a player who played but isn't in the tracking table had no such events: count 0
+        pot = pick(players, passing, "POTENTIAL_AST").fillna(0)
+        created = pick(players, passing, first_column(passing, ["AST_PTS_CREATED", "AST_POINTS_CREATED"])).fillna(0)
         out["potential_ast_per100"] = per100(pot, poss)
         out["ast_pts_created_per100"] = per100(created, poss)
     else:

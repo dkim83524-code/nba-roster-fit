@@ -1,4 +1,4 @@
-"""Team scoring: minutes weights, caps, redundancy, team percentiles, coverage and overlap.
+"""Team scoring: minutes weights, caps, redundancy, team percentiles, coverage, depth, overlap.
 
 Minutes weight: w = player minutes / (team minutes / 5), so weights sum to 5 and a player
 on the floor for every minute counts 1.0.
@@ -12,8 +12,11 @@ Corner sum = sum of w x z over the roster.
     (one player's worth = a reference-percentile player at reference minutes).
 
 Team corner percentile = share of all team-seasons in the window at or below that (capped) value.
-Coverage = area of the team shape drawn from those four percentiles, as a share of the square.
-Overlap = sum of player-shape areas - area of their union (minutes-scaled shapes).
+Coverage = area of the union of the players' shapes (each scaled by minutes), as a share of the
+           square: does anyone on the team cover each part of it?
+Depth    = area of the team outline drawn from the four team corner percentiles: how much of each
+           corner the whole rotation provides, minutes-weighted, compared with history.
+Overlap  = sum of player-shape areas - area of their union.
 """
 from __future__ import annotations
 
@@ -201,14 +204,15 @@ class TeamResult:
     redundancy_players: dict[str, float]
     cap_binding_share: dict[str, float]
     missing_minutes: dict[str, float]
-    coverage: float
+    depth: float
     sum_areas: float
-    union: float
+    coverage: float
     overlap: float
     pool_size: int
     pool_seasons: list[str]
     qualified_n: int
     not_drawn: list[str]
+    color_order: list[int] = field(default_factory=list)  # team's regular-season minutes order
     synthetic: bool = False
 
 
@@ -248,7 +252,7 @@ def evaluate_team(league: League, team: str, season: str, mode: str = REGULAR_MO
         pool = pd.DataFrame([values])
     pct = {c: float(percentile_against([values[c]], pool[c])[0]) for c in CORNERS}
     order = cfg.corners.order
-    coverage = geometry.area_fraction({c: pct[c] / 100 for c in CORNERS}, order)
+    depth = geometry.area_fraction({c: pct[c] / 100 for c in CORNERS}, order)
 
     roster = sums.roster
     complete = roster[[f"{c}_pct" for c in CORNERS]].notna().all(axis=1)
@@ -269,7 +273,7 @@ def evaluate_team(league: League, team: str, season: str, mode: str = REGULAR_MO
         polys.append(geometry.to_polygon(geometry.shape_points(vals, order, row["scale"])))
         areas.append(geometry.area_fraction(vals, order, row["scale"]))
     roster["area"] = areas
-    sum_areas, union, overlap = geometry.overlap_fraction(polys)
+    sum_areas, coverage, overlap = geometry.overlap_fraction(polys)
     not_drawn = roster.loc[~complete & (roster["MIN"] >= cfg.drawing.min_minutes_to_draw),
                            "PLAYER_NAME"].tolist()
 
@@ -277,10 +281,20 @@ def evaluate_team(league: League, team: str, season: str, mode: str = REGULAR_MO
         team=team, team_name=team_name(team), season=season, mode=mode, roster=roster,
         values=values, uncapped=sums.uncapped, pct=pct, cap=caps, one_worth=one_worth,
         redundancy=redundancy, redundancy_players=red_players, cap_binding_share=binding,
-        missing_minutes=sums.missing_minutes, coverage=coverage, sum_areas=sum_areas,
-        union=union, overlap=overlap, pool_size=len(pool), pool_seasons=list(league.pool_seasons),
+        missing_minutes=sums.missing_minutes, depth=depth, sum_areas=sum_areas,
+        coverage=coverage, overlap=overlap, pool_size=len(pool), pool_seasons=list(league.pool_seasons),
         qualified_n=int(league.players[season]["qualified"].sum()), not_drawn=not_drawn,
+        color_order=regular_order(league, team, season),
     )
+
+
+def regular_order(league: League, team: str, season: str) -> list[int]:
+    """The team's players by regular-season minutes, so colors match across regular/playoff charts."""
+    tm = league.minutes[REGULAR_MODE].get(season)
+    if tm is None or tm.empty:
+        return []
+    rows = tm[tm["TEAM_ABBREVIATION"] == team].sort_values("MIN", ascending=False)
+    return [int(p) for p in rows["PLAYER_ID"]]
 
 
 def summary_table(result: TeamResult) -> pd.DataFrame:

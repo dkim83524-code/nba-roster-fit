@@ -135,9 +135,9 @@ def build_player_table(data: SeasonData, impact: pd.DataFrame, cfg: Config) -> p
         "offense": od["offense"],
         "defense": od["defense"],
         "playmaking": composite(pm, cfg.playmaking.weights, pool, PM_NEGATIVE,
-                                cfg.playmaking.min_weight_present),
+                                cfg.playmaking.min_weight_present, cfg.playmaking.component_scaling),
         "portability": composite(port, cfg.portability.weights, pool, (),
-                                 cfg.portability.min_weight_present),
+                                 cfg.portability.min_weight_present, cfg.portability.component_scaling),
     }
     for corner in CORNERS:
         values = raw[corner].astype(float)

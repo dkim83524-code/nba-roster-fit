@@ -40,3 +40,21 @@ def test_composite_negative_orientation():
     df = pd.DataFrame({"tov": [1.0, 2.0, 3.0]})
     out = composite(df, {"tov": 1.0}, pd.Series([True] * 3), negative=("tov",))
     assert out.iloc[0] > out.iloc[2]
+
+
+def test_rank_scaling_stops_one_extreme_stat_from_dominating():
+    # player 0 is a center: off-the-charts OREB, poor at the other three components
+    df = pd.DataFrame({
+        "oreb": [40.0] + [float(i % 7) for i in range(1, 60)],
+        "shoot": [0.0] + [float(i % 11) for i in range(1, 60)],
+        "versatility": [0.0] + [float(i % 5) for i in range(1, 60)],
+        "screens": [0.0] + [float(i % 3) for i in range(1, 60)],
+    })
+    pool = pd.Series([True] * len(df))
+    w = {"oreb": 0.25, "shoot": 0.25, "versatility": 0.25, "screens": 0.25}
+    z_rank = percentile_against(composite(df, w, pool), composite(df, w, pool))[0]
+    r = composite(df, w, pool, scaling="rank")
+    r_rank = percentile_against(r, r)[0]
+    assert z_rank > 60          # plain z: the one outlier lifts the center well up the list
+    assert r_rank < 20          # rank-based: one great stat can't hide three bad ones
+    assert np.nanmax(np.abs(r)) < 3.5

@@ -24,7 +24,7 @@ import pandas as pd
 
 from ..config import Config
 from ..seasons import previous, season_from_end_year, season_from_start, start_year
-from .names import normalize_column, normalize_name
+from .names import match_names, normalize_column, normalize_name
 
 _FILE_SEASON = re.compile(r"(\d{4}-\d{2})")
 
@@ -34,7 +34,8 @@ class ImpactReport:
     files: list[str] = field(default_factory=list)
     columns: dict[str, dict[str, str]] = field(default_factory=dict)  # file -> role -> column
     seasons: list[str] = field(default_factory=list)
-    unmatched: dict[str, list[str]] = field(default_factory=dict)     # season -> names
+    unmatched: dict[str, list[str]] = field(default_factory=dict)     # season -> names with no NBA.com match
+    loose: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # season -> (name, NBA.com name)
 
 
 def _resolve(columns: dict[str, str], aliases: list[str]) -> str | None:
@@ -147,7 +148,6 @@ def load_impact(cfg: Config, players: dict[str, pd.DataFrame],
     """
     long, report = read_impact_files(cfg)
     season_end = season_end or {}
-    overrides = {normalize_name(k): int(v) for k, v in cfg.impact.name_overrides.items()}
     out = []
     for season, rows in long.groupby("season"):
         rows = rows.copy()
@@ -156,29 +156,20 @@ def load_impact(cfg: Config, players: dict[str, pd.DataFrame],
                                "name:" + rows["player_name"].map(normalize_name))
         snap = _snapshot(rows, season_end.get(season))
 
-        lookup: dict[str, int] = {}
         roster = players.get(season)
-        if roster is not None and len(roster):
-            names = roster.drop_duplicates("PLAYER_ID").assign(norm=lambda d: d["PLAYER_NAME"].map(normalize_name))
-            counts = names["norm"].value_counts()
-            lookup = {n: int(pid) for n, pid in zip(names["norm"], names["PLAYER_ID"]) if counts[n] == 1}
-        lookup.update(overrides)
-
-        ids = []
-        unmatched = []
-        for pid, name in zip(snap["player_id"], snap["player_name"]):
-            if pd.notna(pid):
-                ids.append(int(pid))
-                continue
-            norm = normalize_name(name)
-            if norm in lookup:
-                ids.append(lookup[norm])
-            else:
-                ids.append(None)
-                unmatched.append(name)
-        snap["PLAYER_ID"] = pd.array(ids, dtype="Int64")
+        if roster is None:
+            roster = pd.DataFrame(columns=["PLAYER_ID", "PLAYER_NAME"])
+        by_id = {int(p) for p in snap["player_id"].dropna()}
+        to_match = [n for p, n in zip(snap["player_id"], snap["player_name"]) if pd.isna(p)]
+        mapping, loose = match_names(to_match, roster, cfg.impact.name_overrides, taken=by_id)
+        snap["PLAYER_ID"] = pd.array(
+            [int(p) if pd.notna(p) else mapping.get(n) for p, n in zip(snap["player_id"], snap["player_name"])],
+            dtype="Int64")
+        unmatched = sorted({n for n in to_match if n not in mapping})
         if unmatched:
-            report.unmatched[season] = sorted(set(unmatched))
+            report.unmatched[season] = unmatched
+        if loose:
+            report.loose[season] = loose
         snap = snap.dropna(subset=["PLAYER_ID"]).drop_duplicates("PLAYER_ID")
         out.append(snap.assign(season=season)[["season", "PLAYER_ID", "offense", "defense"]])
 

@@ -28,6 +28,9 @@ Details on each component:
 - **C&S 3-point proficiency** is Ben Taylor's 3-pt proficiency curve applied to catch-and-shoot
   3s: a sigmoid on attempts per 100 times C&S 3P%. The percentage is shrunk toward league average
   by 50 attempts.
+- Both composites can be scored two ways (`component_scaling`): plain z-scores, or rank-based
+  z-scores. Portability uses rank, so one extreme stat (a center's OREB%) can't outweigh three
+  weak ones; playmaking uses plain z.
 - **Versatility** is the normalized entropy of a defender's matchup possessions against guards,
   forwards and centers. NBA.com only splits those three ways, so it's coarse.
 - **Box Creation** (Taylor's public formula) is available as a playmaking component with weight 0.
@@ -44,10 +47,15 @@ Details on each component:
     worth = an 85th-percentile player at 34 MPG).
 - **Team corner percentile:** where the (capped) sum ranks among all team-seasons in the window
   (default 2017-18 to 2025-26, about 270 team-seasons).
-- **Coverage:** area of the team outline drawn from those four percentiles, as a share of the square.
-- **Player shapes combined / overlap:** each player's shape is scaled so its area is proportional
-  to minutes relative to the team's minutes leader. Overlap = sum of shape areas − area of their
-  union. It can exceed 1 square when many shapes stack.
+- **Coverage (the headline):** how much of the square the players' shapes fill together, i.e. does
+  *anyone* on the team cover each part of it. Each shape is scaled so its area is proportional to
+  minutes relative to the team's minutes leader.
+- **Depth (the black outline):** the area of the team outline drawn from the four team corner
+  percentiles: how much of each corner the *whole rotation* provides, minutes-weighted and
+  compared with history. A team with one elite defender and four weak ones has high coverage at
+  Stops but low depth there. Hide the outline with `--no-outline` or `drawing.team_outline: false`.
+- **Overlap:** sum of the shape areas − the area they cover together. It can exceed 1 square when
+  many shapes stack.
 - **Playoff mode** (`--playoffs`): the top 8 by playoff minutes, using regular-season metrics,
   compared against other playoff teams' top 8s.
 
@@ -91,9 +99,11 @@ python -m rosterfit browser-script   # writes data/manual/nba/download_nba_stats
 ```
 
 1. Open https://www.nba.com/stats and open the console: Cmd+Option+J (Mac) or Ctrl+Shift+J
-   (Windows). Chrome may ask you to type `allow pasting` first.
-2. Paste the whole script and press Enter. Stay on the tab until it prints `Done`, and allow
-   multiple downloads if asked.
+   (Windows). Red errors already there are nba.com's own ads and trackers; ignore them. Type
+   `rosterfit` in the console's Filter box to see only the script's messages.
+2. Paste the whole script and press Enter. Only if Chrome warns about pasting: type
+   `allow pasting`, press Enter, and paste again. Stay on the tab until it prints `Done`, and
+   allow multiple downloads if asked.
 3. Move the downloaded `nba_stats_<season>.json` files into `data/manual/nba/`.
 
 This is the route to use in GitHub Codespaces, where `fetch` stops right away because NBA.com
@@ -132,10 +142,34 @@ python -m rosterfit plot --team NYK --theme dark --out outputs/knicks_dark.png
 
 Each plot also writes a CSV next to the PNG with every number behind the picture.
 
+**Compare two teams, or look inside a corner**
+
+```bash
+python -m rosterfit compare --team NYK --vs SAS --playoffs   # both top-8 playoff rotations
+python -m rosterfit compare --team NYK --vs SAS              # both full regular-season rosters
+python -m rosterfit explain --team NYK                       # each player's percentile on every
+                                                             # playmaking and portability ingredient
+```
+
+The comparison puts both squares side by side, with coverage, combined shape area, overlap and
+redundancy between them. Underneath are each team's player table and the four team corner
+percentiles on one scale.
+
 ## Configuration
 
 Every weight, cap, threshold, corner order, label and season window lives in
 [`config.yaml`](config.yaml), with comments. Unknown keys are rejected, so typos fail loudly.
+
+For your own changes, create `config.local.yaml` next to it with only the keys you change. It is
+applied on top of `config.yaml`, is git-ignored, and never blocks a `git pull`. For example:
+
+```yaml
+playmaking:
+  component_scaling: "rank"
+impact:
+  name_overrides:
+    "Name In The DARKO CSV": "Name On NBA.com"
+```
 
 ## Data sources and terms
 
@@ -160,11 +194,11 @@ rosterfit/
   geometry.py         shapes, areas, union (shapely)
   plot.py             matplotlib chart
   synthetic.py        made-up league for the demo and tests
-  cli.py              fetch | browser-script | check | plot | demo
+  explain.py          ingredient breakdown behind playmaking and portability
+  cli.py              fetch | browser-script | check | plot | compare | explain | demo
 ```
 
 ## Next
 
-- Side-by-side comparison of two teams.
 - A court-map panel (interior/perimeter × offense/defense) under the square.
 - Clutch study: team corner coverage vs clutch offensive rating and clutch assist rate.

@@ -5,6 +5,7 @@ data/manual/**/*.json
 data/manual/**/*.js
 data/processed/
 outputs/
+config.local.yaml
 
 # Python
 __pycache__/

@@ -4,6 +4,8 @@
     python -m rosterfit check                       # what's cached, what's missing, DARKO matching
     python -m rosterfit plot --team NYK             # chart + CSV for one team, default season
     python -m rosterfit plot --team NYK --playoffs  # top-8 playoff rotation
+    python -m rosterfit compare --team NYK --vs SAS --playoffs   # two teams side by side
+    python -m rosterfit explain --team NYK          # ingredients behind playmaking and portability
     python -m rosterfit demo                        # synthetic league, no network needed
     python -m rosterfit browser-script              # if fetch can't connect: download from your browser
 
@@ -23,6 +25,7 @@ from .cache import Cache
 from .config import Config, load_config
 from .seasons import PLAYOFFS, REGULAR, parse_season_arg
 from .sources.manual_nba import browser_script, download_jobs, import_manual
+from .sources.names import normalize_name
 from .sources.nba_stats import TABLES, NBAStatsFetcher, available
 from .team import PLAYOFF_MODE, REGULAR_MODE, TeamResult, build_league, evaluate_team, summary_table
 
@@ -115,11 +118,37 @@ def cmd_check(cfg: Config, args) -> int:
     print(f"\n{cfg.impact.source_name} files in {cfg.path(cfg.impact.dir)}: {len(rep.files)}")
     for name in rep.files:
         print(f"  {name}: columns used {rep.columns[name]}")
-    for season, names in sorted(rep.unmatched.items()):
-        shown = ", ".join(names[:12]) + (" ..." if len(names) > 12 else "")
-        print(f"  {season}: {len(names)} names not matched to NBA.com players: {shown}")
-    if rep.unmatched:
-        print("  (add them under impact.name_overrides in config.yaml if any matter)")
+    if rep.loose:
+        print("\nMatched by last name or word order (worth a glance):")
+        for season, pairs in sorted(rep.loose.items()):
+            print(f"  {season}: " + ", ".join(f"{a} -> {b}" for a, b in pairs))
+    missing_players = False
+    for season in seasons:
+        p = league.players.get(season)
+        if p is None or season not in impact_seasons:
+            continue
+        gap = p[p["offense_raw"].isna() & (p["MIN"] >= args.min_minutes)].sort_values("MIN", ascending=False)
+        if len(gap):
+            if not missing_players:
+                print(f"\nPlayed {args.min_minutes:g}+ minutes but have no {cfg.impact.source_name} value:")
+                missing_players = True
+            candidates = rep.unmatched.get(season, [])
+            for name, mins in list(zip(gap["PLAYER_NAME"], gap["MIN"]))[:10]:
+                last = normalize_name(name).split()[-1:]
+                maybe = [c for c in candidates if normalize_name(c).split()[-1:] == last]
+                hint = f"   {cfg.impact.source_name} has: {', '.join(maybe)}" if maybe else ""
+                print(f"  {season}  {name} ({mins:,.0f} min){hint}")
+            if len(gap) > 10:
+                print(f"  {season}  ... and {len(gap) - 10} more")
+    if missing_players:
+        print(f"  Fix under impact.name_overrides in config.yaml, e.g.\n"
+              f"    name_overrides:\n      \"Name In The {cfg.impact.source_name} CSV\": \"Name On NBA.com\"")
+    elif impact_seasons:
+        print(f"\nEvery player with {args.min_minutes:g}+ minutes has a {cfg.impact.source_name} value.")
+    unmatched = sum(len(v) for v in rep.unmatched.values())
+    if unmatched:
+        print(f"({unmatched} {cfg.impact.source_name} rows across all seasons are players with no NBA.com minutes "
+              "that season, e.g. injured all year; they're ignored.)")
     print(f"\nTeam pool: {len(league.pool_seasons)} complete season(s) in the window: "
           f"{', '.join(league.pool_seasons) or 'none'}")
     for season, missing in sorted(league.incomplete.items()):
@@ -134,10 +163,10 @@ def cmd_check(cfg: Config, args) -> int:
 def describe(result: TeamResult, cfg: Config) -> str:
     lines = [
         f"{result.team_name} ({result.team}) - {result.season} {result.mode}",
-        f"Coverage: {result.coverage * 100:.1f}% of the square "
+        f"Coverage: {result.coverage * 100:.1f}% of the square filled by the players' shapes; "
+        f"overlap {result.overlap:.2f} squares (sum of shape areas {result.sum_areas:.2f})",
+        f"Depth: {result.depth * 100:.1f}% of the square inside the team outline "
         f"(team outline vs {result.pool_size} team-seasons)",
-        f"Player shapes combined: {result.union * 100:.1f}% of the square; overlap {result.overlap:.2f} squares "
-        f"(sum of shape areas {result.sum_areas:.2f})",
     ]
     for c in cfg.team.capped_corners:
         lines.append(f"Redundancy, {cfg.label(c)}: +{result.redundancy_players[c]:.2f} players' worth "
@@ -207,10 +236,71 @@ def cmd_browser_script(cfg: Config, args) -> int:
 
 1. Open {out.name} in the editor, select all and copy it.
 2. In a new browser tab open https://www.nba.com/stats, then its console:
-   Cmd+Option+J (Mac) or Ctrl+Shift+J (Windows). Chrome may ask you to type "allow pasting" first.
-3. Paste and press Enter. Stay on the tab until it says Done; allow multiple downloads if asked.
+   Cmd+Option+J (Mac) or Ctrl+Shift+J (Windows). Red errors already in the console are nba.com's
+   own ads and trackers; ignore them. Type rosterfit in the console's Filter box to hide them.
+3. Paste and press Enter. Only if Chrome warns about pasting: type allow pasting, press Enter,
+   then paste again. Stay on the tab until it says Done; allow multiple downloads if asked.
 4. {move}
 5. Run: python -m rosterfit check""")
+    return 0
+
+
+def cmd_explain(cfg: Config, args) -> int:
+    from .explain import format_table, ingredients
+
+    season = args.season or cfg.seasons.target
+    league = build_league(cfg, _open_cache(cfg), [season])
+    if season not in league.players:
+        print(f"error: no cached data for {season}", file=sys.stderr)
+        return 2
+    team = args.team.upper()
+    minutes = league.minutes[REGULAR_MODE][season]
+    if team not in set(minutes["TEAM_ABBREVIATION"]):
+        print(f"error: no {season} minutes for {team}", file=sys.stderr)
+        return 2
+    n = int(league.players[season]["qualified"].sum())
+    corners = ["playmaking", "portability"] if args.corner == "both" else [args.corner]
+    for corner in corners:
+        table = ingredients(league.players[season], minutes, team, corner, cfg, args.top)
+        section = getattr(cfg, corner)
+        title = (f"\n{cfg.label(corner)} ({corner}) - {team} {season}: percentile on each ingredient "
+                 f"among {n} qualified players")
+        print(format_table(table, title, section.weights, section.component_scaling))
+    return 0
+
+
+def describe_compare(a: TeamResult, b: TeamResult, cfg: Config) -> str:
+    rows = [("Coverage (players' shapes)", lambda r: f"{r.coverage * 100:.0f}%"),
+            ("Depth (team outline)", lambda r: f"{r.depth * 100:.0f}%"),
+            ("Overlap (squares)", lambda r: f"{r.overlap:.2f}")]
+    rows += [(f"Redundancy: {cfg.label(c)}", lambda r, c=c: f"+{r.redundancy_players.get(c, 0):.2f}")
+             for c in cfg.team.capped_corners]
+    rows += [(f"{cfg.label(c)} (team pct)", lambda r, c=c: f"{r.pct[c]:.0f}") for c in cfg.corners.order]
+    lines = [f"{a.team_name} vs {b.team_name} - {a.season} {a.mode}",
+             f"{'':<34}{a.team:>8}{b.team:>8}"]
+    lines += [f"{name:<34}{fmt(a):>8}{fmt(b):>8}" for name, fmt in rows]
+    return "\n".join(lines)
+
+
+def cmd_compare(cfg: Config, args) -> int:
+    import pandas as pd
+
+    from .plot import render_compare
+
+    season = args.season or cfg.seasons.target
+    league = build_league(cfg, _open_cache(cfg), sorted(set(cfg.window_seasons) | {season}))
+    mode = PLAYOFF_MODE if args.playoffs else REGULAR_MODE
+    try:
+        a = evaluate_team(league, args.team.upper(), season, mode)
+        b = evaluate_team(league, args.vs.upper(), season, mode)
+    except ValueError as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 2
+    print(describe_compare(a, b, cfg))
+    out = Path(args.out) if args.out else cfg.path("outputs") / f"{a.team}_vs_{b.team}_{season}_{mode}.png"
+    png = render_compare(a, b, cfg, out, args.theme)
+    pd.concat([summary_table(a), summary_table(b)]).to_csv(png.with_suffix(".csv"), index=False)
+    print(f"\nWrote {png}\n      {png.with_suffix('.csv')}")
     return 0
 
 
@@ -255,8 +345,27 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", help="where to write the script")
     p.set_defaults(func=cmd_browser_script)
 
+    p = sub.add_parser("compare", help="two teams side by side")
+    p.add_argument("--team", required=True, help="first team, e.g. NYK")
+    p.add_argument("--vs", required=True, help="second team, e.g. SAS")
+    p.add_argument("--season", help="default: seasons.target in config.yaml")
+    p.add_argument("--playoffs", action="store_true", help="compare top playoff rotations")
+    p.add_argument("--theme", choices=["light", "dark"])
+    p.add_argument("--no-outline", action="store_true", help="hide the team depth outlines")
+    p.add_argument("--out", help="output PNG path (a CSV with the same name is written next to it)")
+    p.set_defaults(func=cmd_compare)
+
+    p = sub.add_parser("explain", help="show the ingredients behind playmaking and portability for a team")
+    p.add_argument("--team", required=True)
+    p.add_argument("--season", help="default: seasons.target in config.yaml")
+    p.add_argument("--corner", choices=["playmaking", "portability", "both"], default="both")
+    p.add_argument("--top", type=int, default=10, help="how many players, by minutes")
+    p.set_defaults(func=cmd_explain)
+
     p = sub.add_parser("check", help="report cached tables, impact CSVs and the team pool")
     p.add_argument("--seasons")
+    p.add_argument("--min-minutes", type=float, default=100,
+                   help="list players with at least this many minutes who lack an impact value")
     p.set_defaults(func=cmd_check)
 
     for name, func, helptext in (("plot", cmd_plot, "draw one team"),
@@ -267,6 +376,7 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--season", help="default: seasons.target in config.yaml")
         p.add_argument("--playoffs", action="store_true", help="top playoff rotation instead of full roster")
         p.add_argument("--theme", choices=["light", "dark"])
+        p.add_argument("--no-outline", action="store_true", help="hide the team depth outline")
         p.add_argument("--out", help="output PNG path (a CSV with the same name is written next to it)")
         p.set_defaults(func=func)
 
@@ -274,6 +384,8 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING,
                         format="%(levelname)s %(message)s")
     cfg = load_config(args.config)
+    if getattr(args, "no_outline", False):
+        cfg.drawing.team_outline = False
     return args.func(cfg, args)
 
 

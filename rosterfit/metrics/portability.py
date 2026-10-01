@@ -29,7 +29,8 @@ def cs3_proficiency(players: pd.DataFrame, catch_shoot: pd.DataFrame, prior_atte
     shrunk = (made.fillna(0) + prior_attempts * league_pct) / (att.fillna(0) + prior_attempts)
     rate = per100(att.fillna(0), players["POSS"])
     prof = pd.Series(three_point_proficiency(rate, shrunk), index=players.index)
-    return prof.where(rate.notna() & att.notna())
+    # NBA.com only lists players who took a catch-and-shoot shot: absent means none, i.e. 0.
+    return prof.where(rate.notna())
 
 
 def versatility(matchups: pd.DataFrame, min_partial_poss: float) -> pd.Series:
@@ -58,7 +59,7 @@ def portability_components(players: pd.DataFrame, advanced: pd.DataFrame | None,
                               if catch_shoot is not None and len(catch_shoot) else nan)
     out["oreb_pct"] = (pick(players, advanced, "OREB_PCT", how="first")
                        if advanced is not None and len(advanced) else nan)
-    out["screen_ast_per100"] = (per100(pick(players, hustle, "SCREEN_ASSISTS"), players["POSS"])
+    out["screen_ast_per100"] = (per100(pick(players, hustle, "SCREEN_ASSISTS").fillna(0), players["POSS"])
                                 if hustle is not None and len(hustle) else nan)
     if matchups is not None and len(matchups):
         vers = versatility(matchups, min_partial_poss)
