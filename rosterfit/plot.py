@@ -95,7 +95,7 @@ def _place_labels(candidates, char_w=0.021, h=0.055):
         direction = np.array([vx, vy]) / (np.hypot(vx, vy) or 1)
         chosen = None
         for dist in (0.06, 0.12, 0.2, 0.3):
-            for turn in (0, 25, -25, 50, -50, 90, -90):
+            for turn in (0, 25, -25, 50, -50, 90, -90, 135, -135, 180):  # inward last, for corner points
                 a = np.deg2rad(turn)
                 d = np.array([direction[0] * np.cos(a) - direction[1] * np.sin(a),
                               direction[0] * np.sin(a) + direction[1] * np.cos(a)])
@@ -107,9 +107,12 @@ def _place_labels(candidates, char_w=0.021, h=0.055):
                     break
             if chosen:
                 break
-        if chosen is None:  # crowded: accept the plain outward spot
+        if chosen is None:  # crowded: take the plain outward spot, nudged back inside the drawing
             lx, ly = vx + direction[0] * 0.06, vy + direction[1] * 0.06
             ha = "left" if direction[0] >= 0 else "right"
+            b = box(lx, ly, w, ha)
+            lx += max(0.0, -1.17 - b[0]) - max(0.0, b[2] - 1.17)
+            ly += max(0.0, -1.0 - b[1]) - max(0.0, b[3] - 1.0)
             chosen = (lx, ly, ha, box(lx, ly, w, ha))
         placed.append(chosen[3])
         out.append((name, (vx, vy), chosen[:3]))
