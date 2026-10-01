@@ -952,7 +952,7 @@ td.dim { color: var(--muted); }
   const SOURCES = M.impact_sources || [{ name: M.impact_source, url: "https://www.darko.app", offense: 1, defense: 1 }];
   if (SOURCES.length > 1) {
     const mix = (side) => SOURCES.filter((x) => x[side] > 0).map((x) => `${x.name} ${Math.round(100 * x[side] / SOURCES.reduce((t, y) => t + y[side], 0))}%`).join(" + ");
-    gloss.push(["Scores and Stops", `Blends of plus-minus metrics, each standardized among the season's qualified players: offense ${mix("offense")}, defense ${mix("defense")}. The weighting follows Crafted NBA's defensive blend.`]);
+    gloss.push([`${M.labels.offense} and ${M.labels.defense}`, `Blends of plus-minus metrics, each standardized among the season's qualified players: offense ${mix("offense")}, defense ${mix("defense")}. The weighting follows Crafted NBA's defensive blend.`]);
   }
   if ([...INDEX[LATEST].values()].some((p) => p.defRole)) {
     gloss.push(["Roles", "Offensive and defensive role labels from BBall Index's LEBRON database, shown when you hover a player."]);

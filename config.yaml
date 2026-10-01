@@ -18,7 +18,7 @@ corners:
   # area = (sum of one opposite pair) x (sum of the other) / 4.
   order: [offense, playmaking, portability, defense]
   labels:
-    offense: "Scores"
+    offense: "Offense"                 # O-LEBRON and O-DARKO measure all of offense, not just scoring
     playmaking: "Sets up others"
     portability: "Fits next to stars"
     defense: "Stops"
