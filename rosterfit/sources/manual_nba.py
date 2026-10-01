@@ -67,15 +67,19 @@ def matchup_team_urls(season: str, season_type: str) -> dict[str, str]:
 
 _SCRIPT = r"""// rosterfit: download NBA.com stats tables from your own browser.
 // 1. Open https://www.nba.com/stats in Chrome, Edge or Firefox and stay on that tab.
-// 2. Open the console (Mac: Cmd+Option+J, Windows: Ctrl+Shift+J). Chrome may ask you to type
-//    "allow pasting" first.
-// 3. Paste this whole file and press Enter. Allow multiple downloads if the browser asks.
+// 2. Open the console (Mac: Cmd+Option+J, Windows: Ctrl+Shift+J). Red errors already there are
+//    nba.com's own ads and trackers; ignore them. Type rosterfit in the console's Filter box to
+//    see only this script's messages.
+// 3. Paste this whole file and press Enter. Only if Chrome shows a warning about pasting: type
+//    allow pasting, press Enter, then paste again. Allow multiple downloads if the browser asks.
 // 4. Move the downloaded nba_stats_<season>.json files into data/manual/nba/ and run
 //    `python -m rosterfit check`.
 (async () => {
   const JOBS = __JOBS__;
   const MATCHUP_TEAM_URLS = __TEAM_URLS__;
   const PAUSE_MS = 1200;
+  const log = (...a) => console.log("[rosterfit]", ...a);
+  log(`starting ${JOBS.length} downloads; keep this tab open until it says Done`);
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const rowCount = (data) => {
     const rs = data.resultSets ?? data.resultSet;
@@ -89,7 +93,7 @@ _SCRIPT = r"""// rosterfit: download NBA.com stats tables from your own browser.
         if (!res.ok) throw new Error("HTTP " + res.status);
         return await res.json();
       } catch (err) {
-        console.warn(`  attempt ${attempt} failed: ${err}`);
+        console.warn(`[rosterfit]   attempt ${attempt} failed: ${err}`);
         await sleep(3000 * attempt);
       }
     }
@@ -104,7 +108,7 @@ _SCRIPT = r"""// rosterfit: download NBA.com stats tables from your own browser.
       const items = (bySeason[job.season] ??= []);
       if (job.table === "matchups" && rowCount(data) === 0) {
         const urls = MATCHUP_TEAM_URLS[job.season + "|" + job.season_type] || {};
-        console.log(`${tag}: empty league-wide, fetching ${Object.keys(urls).length} teams`);
+        log(`${tag}: empty league-wide, fetching ${Object.keys(urls).length} teams`);
         let total = 0;
         for (const [teamId, url] of Object.entries(urls)) {
           await sleep(PAUSE_MS);
@@ -112,14 +116,14 @@ _SCRIPT = r"""// rosterfit: download NBA.com stats tables from your own browser.
           total += rowCount(part);
           items.push({ ...job, url, def_team_id: Number(teamId), response: part });
         }
-        console.log(`${tag}: ${total} rows from team requests`);
+        log(`${tag}: ${total} rows from team requests`);
       } else {
         items.push({ ...job, response: data });
-        console.log(`${tag}: ${rowCount(data)} rows`);
+        log(`${tag}: ${rowCount(data)} rows`);
       }
     } catch (err) {
       failed.push(job);
-      console.error(`${tag}: FAILED (${err})`);
+      console.error(`[rosterfit] ${tag}: FAILED (${err})`);
     }
     await sleep(PAUSE_MS);
   }
@@ -133,7 +137,7 @@ _SCRIPT = r"""// rosterfit: download NBA.com stats tables from your own browser.
     a.remove();
     await sleep(1000);
   }
-  console.log(failed.length ? `Done, ${failed.length} request(s) failed; paste the script again to retry them.`
+  log(failed.length ? `Done, ${failed.length} request(s) failed; paste the script again to retry them.`
                             : "Done. Move the nba_stats_*.json downloads into data/manual/nba/.");
 })();
 """

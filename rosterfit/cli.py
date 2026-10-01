@@ -207,8 +207,10 @@ def cmd_browser_script(cfg: Config, args) -> int:
 
 1. Open {out.name} in the editor, select all and copy it.
 2. In a new browser tab open https://www.nba.com/stats, then its console:
-   Cmd+Option+J (Mac) or Ctrl+Shift+J (Windows). Chrome may ask you to type "allow pasting" first.
-3. Paste and press Enter. Stay on the tab until it says Done; allow multiple downloads if asked.
+   Cmd+Option+J (Mac) or Ctrl+Shift+J (Windows). Red errors already in the console are nba.com's
+   own ads and trackers; ignore them. Type rosterfit in the console's Filter box to hide them.
+3. Paste and press Enter. Only if Chrome warns about pasting: type allow pasting, press Enter,
+   then paste again. Stay on the tab until it says Done; allow multiple downloads if asked.
 4. {move}
 5. Run: python -m rosterfit check""")
     return 0

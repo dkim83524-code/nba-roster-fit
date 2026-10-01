@@ -91,9 +91,11 @@ python -m rosterfit browser-script   # writes data/manual/nba/download_nba_stats
 ```
 
 1. Open https://www.nba.com/stats and open the console: Cmd+Option+J (Mac) or Ctrl+Shift+J
-   (Windows). Chrome may ask you to type `allow pasting` first.
-2. Paste the whole script and press Enter. Stay on the tab until it prints `Done`, and allow
-   multiple downloads if asked.
+   (Windows). Red errors already there are nba.com's own ads and trackers; ignore them. Type
+   `rosterfit` in the console's Filter box to see only the script's messages.
+2. Paste the whole script and press Enter. Only if Chrome warns about pasting: type
+   `allow pasting`, press Enter, and paste again. Stay on the tab until it prints `Done`, and
+   allow multiple downloads if asked.
 3. Move the downloaded `nba_stats_<season>.json` files into `data/manual/nba/`.
 
 This is the route to use in GitHub Codespaces, where `fetch` stops right away because NBA.com
