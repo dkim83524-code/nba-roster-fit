@@ -5,6 +5,8 @@ value, times 100. The best value in the pool scores 100.
 """
 from __future__ import annotations
 
+from statistics import NormalDist
+
 import numpy as np
 import pandas as pd
 
@@ -34,18 +36,42 @@ def percentile_against(values, pool_values) -> np.ndarray:
     return out
 
 
+_INV_CDF = np.vectorize(NormalDist().inv_cdf)
+
+
+def rank_normal(values: pd.Series, pool: pd.Series) -> pd.Series:
+    """Rank-based z: a value's mid-rank share of the pool, mapped through the normal curve.
+
+    Unlike a plain z-score, one extreme stat (a center's OREB%) can't run far beyond ~2.5.
+    """
+    ref = np.sort(values[pool & values.notna()].to_numpy(dtype=float))
+    n = len(ref)
+    out = np.full(len(values), np.nan)
+    if n < 2:
+        return pd.Series(out, index=values.index)
+    v = values.to_numpy(dtype=float)
+    ok = ~np.isnan(v)
+    share = (np.searchsorted(ref, v[ok], "left") + np.searchsorted(ref, v[ok], "right")) / (2.0 * n)
+    out[ok] = _INV_CDF(np.clip(share, 0.5 / n, 1 - 0.5 / n))
+    return pd.Series(out, index=values.index)
+
+
 def composite(components: pd.DataFrame, weights: dict[str, float], pool: pd.Series,
-              negative: tuple[str, ...] = (), min_weight_present: float = 0.5) -> pd.Series:
+              negative: tuple[str, ...] = (), min_weight_present: float = 0.5,
+              scaling: str = "z") -> pd.Series:
     """Weighted mean of pool-standardized components, renormalized over what each player has.
 
-    A player missing more than (1 - min_weight_present) of the total weight gets NaN.
+    scaling "z" standardizes each component with the pool's mean and SD; "rank" uses rank-based
+    z-scores, so a skewed component can't dominate. A player missing more than
+    (1 - min_weight_present) of the total weight gets NaN.
     """
+    scorer = {"z": zscore, "rank": rank_normal}[scaling]
     active = {k: w for k, w in weights.items() if w > 0}
     total = sum(active.values())
     num = pd.Series(0.0, index=components.index)
     den = pd.Series(0.0, index=components.index)
     for name, w in active.items():
-        z = zscore(components[name].astype(float), pool)
+        z = scorer(components[name].astype(float), pool)
         if name in negative:
             z = -z
         has = z.notna()

@@ -56,12 +56,14 @@ class ImpactCfg:
 class PlaymakingCfg:
     weights: dict[str, float] = field(default_factory=dict)
     min_weight_present: float = 0.5
+    component_scaling: str = "z"
 
 
 @dataclass
 class PortabilityCfg:
     weights: dict[str, float] = field(default_factory=dict)
     min_weight_present: float = 0.5
+    component_scaling: str = "z"
     cs3_pct_prior_attempts: float = 50
     versatility_min_partial_poss: float = 300
 
@@ -170,6 +172,8 @@ def validate(cfg: Config) -> None:
     if not 0 < cfg.team.cap_pool_percentile <= 100:
         raise ValueError("team.cap_pool_percentile must be in (0, 100]")
     for section in (cfg.playmaking, cfg.portability):
+        if section.component_scaling not in ("z", "rank"):
+            raise ValueError("component_scaling must be 'z' or 'rank'")
         if any(w < 0 for w in section.weights.values()):
             raise ValueError("component weights must be >= 0 (orientation is handled in code)")
         if sum(section.weights.values()) <= 0:

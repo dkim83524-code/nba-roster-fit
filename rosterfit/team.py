@@ -209,6 +209,7 @@ class TeamResult:
     pool_seasons: list[str]
     qualified_n: int
     not_drawn: list[str]
+    color_order: list[int] = field(default_factory=list)  # team's regular-season minutes order
     synthetic: bool = False
 
 
@@ -280,7 +281,17 @@ def evaluate_team(league: League, team: str, season: str, mode: str = REGULAR_MO
         missing_minutes=sums.missing_minutes, coverage=coverage, sum_areas=sum_areas,
         union=union, overlap=overlap, pool_size=len(pool), pool_seasons=list(league.pool_seasons),
         qualified_n=int(league.players[season]["qualified"].sum()), not_drawn=not_drawn,
+        color_order=regular_order(league, team, season),
     )
+
+
+def regular_order(league: League, team: str, season: str) -> list[int]:
+    """The team's players by regular-season minutes, so colors match across regular/playoff charts."""
+    tm = league.minutes[REGULAR_MODE].get(season)
+    if tm is None or tm.empty:
+        return []
+    rows = tm[tm["TEAM_ABBREVIATION"] == team].sort_values("MIN", ascending=False)
+    return [int(p) for p in rows["PLAYER_ID"]]
 
 
 def summary_table(result: TeamResult) -> pd.DataFrame:

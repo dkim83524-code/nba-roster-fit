@@ -119,7 +119,7 @@ def render(result: TeamResult, cfg: Config, out_path: str | Path, theme_name: st
     drawn = roster[roster["drawn"]].sort_values("MIN", ascending=False)
     colored = drawn.head(cfg.drawing.max_colored_players)
     others = drawn.iloc[len(colored):]
-    colors = dict(zip(colored["PLAYER_ID"], theme["series"]))
+    colors = assign_colors(list(colored["PLAYER_ID"]), result.color_order, theme["series"])
 
     # -- title ------------------------------------------------------------------------------
     mode = "playoff rotation (top %d)" % cfg.playoffs.rotation_size if result.mode == PLAYOFF_MODE \
@@ -284,6 +284,18 @@ def render(result: TeamResult, cfg: Config, out_path: str | Path, theme_name: st
     fig.savefig(out_path, dpi=cfg.drawing.dpi, facecolor=theme["surface"])
     plt.close(fig)
     return out_path
+
+
+def assign_colors(players: list[int], order: list[int], palette: list[str]) -> dict[int, str]:
+    """Slot k goes to the team's k-th player by regular-season minutes, in every chart, so a
+    player keeps one color. Players outside that top group take the slots left free."""
+    rank = {p: i for i, p in enumerate(order)}
+    slots = {p: rank[p] for p in players if rank.get(p, len(palette)) < len(palette)}
+    free = [i for i in range(len(palette)) if i not in slots.values()]
+    for p in players:
+        if p not in slots:
+            slots[p] = free.pop(0)
+    return {p: palette[i] for p, i in slots.items()}
 
 
 def _season_span(seasons: list[str]) -> str:

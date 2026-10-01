@@ -53,6 +53,7 @@ playmaking:                          # creating for teammates; self-scoring belo
     turnovers_per100: 0.0            # counted as a negative when > 0
     box_creation: 0.0                # Ben Taylor's Box Creation; includes a scorer-gravity term
   min_weight_present: 0.5            # need at least this share of the weight to score a player
+  component_scaling: "z"             # z: mean/SD z-scores; rank: rank-based z-scores (an outlier stat can't dominate)
 
 portability:                         # value kept without the ball
   weights:
@@ -61,6 +62,7 @@ portability:                         # value kept without the ball
     screen_ast_per100: 0.25
     versatility: 0.25                # spread of matchup time across guards / forwards / centers
   min_weight_present: 0.5
+  component_scaling: "z"             # z or rank; see playmaking above
   cs3_pct_prior_attempts: 50         # shrink C&S 3P% toward league average by this many attempts
   versatility_min_partial_poss: 300  # fewer matchup possessions than this -> no versatility score
 

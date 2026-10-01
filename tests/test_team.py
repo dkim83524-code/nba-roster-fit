@@ -87,3 +87,24 @@ def test_team_percentiles_in_range(league):
         res = evaluate_team(league, team, "2025-26")
         assert all(0 < res.pct[c] <= 100 for c in CORNERS)
         assert not np.isnan(res.coverage)
+
+
+def test_player_colors_match_between_regular_and_playoff_charts(league):
+    from rosterfit.plot import assign_colors
+
+    palette = list("ABCDEFGH")
+    reg = evaluate_team(league, "DEM", "2025-26")
+    po = evaluate_team(league, "DEM", "2025-26", PLAYOFF_MODE)
+    assert reg.color_order == po.color_order
+    reg_colors = assign_colors(list(reg.roster["PLAYER_ID"][:8]), reg.color_order, palette)
+    po_colors = assign_colors(list(po.roster["PLAYER_ID"]), po.color_order, palette)
+    for pid in set(reg_colors) & set(po_colors):
+        assert reg_colors[pid] == po_colors[pid]
+    assert len(set(po_colors.values())) == len(po_colors)  # no two players share a color
+
+
+def test_assign_colors_gives_newcomers_the_free_slots():
+    from rosterfit.plot import assign_colors
+
+    colors = assign_colors([2, 99, 1], order=[1, 2, 3], palette=["a", "b", "c"])
+    assert colors == {1: "a", 2: "b", 99: "c"}
