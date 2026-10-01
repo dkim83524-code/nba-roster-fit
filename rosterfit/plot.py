@@ -38,11 +38,12 @@ def _fmt_pct(x: float) -> str:
     return "–" if x is None or np.isnan(x) else f"{x:.0f}"
 
 
-def _frame(ax, theme, order, labels=None, descriptions=None, rings=(0.25, 0.5, 0.75), small=False):
-    """Square outline, percentile rings, diagonals and (optionally) corner labels."""
+def _frame(ax, theme, order, labels=None, descriptions=None, rings=None, small=False):
+    """Square outline, guide rings ((distance, label) pairs), diagonals and (optionally) corner labels."""
+    rings = rings if rings is not None else geometry.rings(330, "percentile")
     ax.set_aspect("equal")
     ax.axis("off")
-    for p in rings:
+    for p, _ in rings:
         ax.add_patch(MplPolygon(geometry.CORNER_XY * p, closed=True, fill=False,
                                 ec=theme["grid"], lw=0.8, zorder=1))
     for x, y in geometry.CORNER_XY:
@@ -51,8 +52,8 @@ def _frame(ax, theme, order, labels=None, descriptions=None, rings=(0.25, 0.5, 0
                             lw=1.0 if small else 1.2, zorder=1))
     if small or labels is None:
         return
-    for p in rings:
-        ax.text(0, p - 0.012, f"{p * 100:.0f}", ha="center", va="top", fontsize=8,
+    for p, text in rings:
+        ax.text(0, p - 0.012, text, ha="center", va="top", fontsize=8,
                 color=theme["muted"], zorder=2)
     for i, corner in enumerate(order):
         x, y = geometry.CORNER_XY[i]
@@ -140,7 +141,7 @@ def render(result: TeamResult, cfg: Config, out_path: str | Path, theme_name: st
     fig.text(0.03, 0.955, f"{result.team_name} · {result.season} {mode}", fontsize=21,
              fontweight="bold", color=theme["ink"], va="center")
     fig.text(0.03, 0.918,
-             f"Player shapes: percentile among {result.qualified_n} qualified players "
+             f"Player shapes: {'rank' if result.scale == 'rank' else 'percentile'} among {result.qualified_n} qualified players "
              f"(≥{cfg.qualified.min_gp} GP, ≥{cfg.qualified.min_mpg:g} MPG); shape area ∝ minutes.  "
              f"Depth: team percentile vs {result.pool_size} team-seasons "
              f"({_season_span(result.pool_seasons)}).",
@@ -210,7 +211,7 @@ def render(result: TeamResult, cfg: Config, out_path: str | Path, theme_name: st
         r, col = divmod(k, per_row)
         sx = fig.add_axes([x0 + col * (width + 0.03), 0.165 - r * (height + 0.03), width, height],
                           facecolor=theme["surface"])
-        _frame(sx, theme, order, small=True, rings=(0.5,))
+        _frame(sx, theme, order, small=True, rings=geometry.rings(result.qualified_n, result.scale)[1:2])
         sx.set_xlim(-1.08, 1.08)
         sx.set_ylim(-1.08, 1.08)
         p = pts(row, scale=1.0)
@@ -226,7 +227,7 @@ def render(result: TeamResult, cfg: Config, out_path: str | Path, theme_name: st
     notes = []
     if result.not_drawn:
         notes.append("Not drawn (missing data): " + ", ".join(result.not_drawn[:6]))
-    notes.append(f"Data: NBA.com via nba_api; {cfg.impact.source_name} for offense/defense.")
+    notes.append(f"Data: NBA.com via nba_api; {' and '.join(cfg.impact.active_sources())} for offense/defense.")
     fig.text(0.03, 0.022, "   ".join(notes), fontsize=8.5, color=theme["muted"])
 
     out_path = Path(out_path)
@@ -237,7 +238,7 @@ def render(result: TeamResult, cfg: Config, out_path: str | Path, theme_name: st
 
 
 def _points(row, order, scale=None):
-    vals = {c: row[f"{c}_pct"] / 100 for c in CORNERS}
+    vals = {c: row[f"{c}_r"] for c in CORNERS}
     return geometry.shape_points(vals, order, row["scale"] if scale is None else scale)
 
 
@@ -256,7 +257,8 @@ def draw_square(ax, result: TeamResult, cfg: Config, theme: dict, colored, other
     """The square: rings, diagonals, corner labels, player shapes, team outline, name labels."""
     order = cfg.corners.order
     labels = {c: cfg.label(c) for c in CORNERS}
-    _frame(ax, theme, order, labels, cfg.corners.descriptions)
+    _frame(ax, theme, order, labels, cfg.corners.descriptions,
+           rings=geometry.rings(result.qualified_n, result.scale))
     ax.set_xlim(-1.2, 1.2)
     ax.set_ylim(-1.25, 1.25)
 
@@ -271,7 +273,7 @@ def draw_square(ax, result: TeamResult, cfg: Config, theme: dict, colored, other
         ax.add_patch(MplPolygon(p, closed=True, fill=False, ec=c, lw=2, joinstyle="round", zorder=4))
 
     if cfg.drawing.team_outline:
-        team_pts = geometry.shape_points({c: result.pct[c] / 100 for c in CORNERS}, order)
+        team_pts = geometry.shape_points(result.radii, order)
         ax.add_patch(MplPolygon(team_pts, closed=True, fill=False, ec=theme["ink"], lw=2.6,
                                 joinstyle="round", zorder=6))
 
@@ -369,7 +371,7 @@ def render_compare(a: TeamResult, b: TeamResult, cfg: Config, out_path: str | Pa
     fig.text(0.03, 0.965, f"{a.team_name} vs {b.team_name} · {a.season} {mode}", fontsize=21,
              fontweight="bold", color=theme["ink"], va="center")
     fig.text(0.03, 0.935,
-             f"Player shapes: percentile among {a.qualified_n} qualified players; shape area ∝ minutes "
+             f"Player shapes: {'rank' if a.scale == 'rank' else 'percentile'} among {a.qualified_n} qualified players; shape area ∝ minutes "
              f"within each team.  Depth: team percentile vs {a.pool_size} team-seasons "
              f"({_season_span(a.pool_seasons)}).",
              fontsize=10.5, color=theme["ink2"], va="center")
@@ -438,7 +440,7 @@ def render_compare(a: TeamResult, b: TeamResult, cfg: Config, out_path: str | Pa
     for x in (0, 50, 100):
         dx.text(x, -0.5, f"{x}", ha="center", va="center", fontsize=7.5, color=theme["muted"])
 
-    fig.text(0.97, 0.008, f"Data: NBA.com via nba_api; {cfg.impact.source_name} for offense/defense.",
+    fig.text(0.97, 0.008, f"Data: NBA.com via nba_api; {' and '.join(cfg.impact.active_sources())} for offense/defense.",
              fontsize=8, color=theme["muted"], ha="right")
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

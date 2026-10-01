@@ -89,3 +89,20 @@ def test_labels_keep_clear_of_other_players_dots():
     left = lx if ha == "left" else lx - width
     dx, dy = candidates[1][1]
     assert left > dx + dot or left + width < dx - dot or ly - half_h > dy + dot or ly + half_h < dy - dot
+
+
+def test_rank_scale_spreads_out_the_top():
+    n = 330
+    by_rank = lambda k: geometry.radius(100 * (n - (k - 1)) / n, n)   # k-th best: k - 1 players ahead
+    assert by_rank(1) == pytest.approx(1.0)
+    assert by_rank(4) == pytest.approx(0.76, abs=0.01)
+    assert by_rank(20) == pytest.approx(0.48, abs=0.01)
+    assert geometry.radius(50, n) == pytest.approx(0.12, abs=0.01)
+    # every halving of the rank adds the same step
+    step = np.log(2) / np.log(n + 1)
+    assert by_rank(10) - by_rank(20) == pytest.approx(step, rel=1e-9)
+    assert by_rank(2) - by_rank(4) == pytest.approx(step, rel=1e-9)
+    assert geometry.radius(95, n, "percentile") == pytest.approx(0.95)
+    assert np.isnan(geometry.radius(float("nan"), n))
+    assert [label for _, label in geometry.rings(n)] == ["top 5", "top 20", "top 50"]
+    assert geometry.rings(n)[1][0] == pytest.approx(by_rank(20))

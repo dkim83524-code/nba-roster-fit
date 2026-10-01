@@ -56,8 +56,9 @@ def test_players_worth_mode(league):
 
 def test_coverage_is_union_of_player_shapes_and_depth_is_team_outline(league):
     res = evaluate_team(league, "DEM", "2025-26")
-    v = {c: res.pct[c] / 100 for c in CORNERS}
-    assert res.depth == pytest.approx(geometry.area_fraction(v, league.cfg.corners.order))
+    n = len(league.pool("regular"))
+    assert res.radii == pytest.approx({c: geometry.radius(res.pct[c], n, "rank") for c in CORNERS})
+    assert res.depth == pytest.approx(geometry.area_fraction(res.radii, league.cfg.corners.order))
     assert 0 <= res.coverage <= 1
     assert res.overlap == pytest.approx(res.sum_areas - res.coverage)
 

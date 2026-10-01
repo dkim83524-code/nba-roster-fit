@@ -432,11 +432,12 @@ td.dim { color: var(--muted); }
   function drawSquare(svg, res, opts) {
     svg.replaceChildren();
     svg.setAttribute("viewBox", `${-1.36 * S} ${-1.32 * S} ${2.72 * S} ${2.64 * S}`);
-    for (const p of [0.25, 0.5, 0.75]) node("polygon", { class: "ring", points: pts(RF.CORNER_XY.map(([x, y]) => [x * p, y * p])) }, svg);
+    const RINGS = RF.rings(M.qualified[LATEST], M.scale);
+    for (const [p] of RINGS) node("polygon", { class: "ring", points: pts(RF.CORNER_XY.map(([x, y]) => [x * p, y * p])) }, svg);
     for (const [x, y] of RF.CORNER_XY) node("line", { class: "diag", x1: 0, y1: 0, x2: x * S, y2: -y * S }, svg);
     node("polygon", { class: "frame", points: pts(RF.CORNER_XY) }, svg);
-    for (const p of [0.25, 0.5, 0.75]) {
-      node("text", { class: "tick", x: 0, y: ((-p + 0.06) * S).toFixed(1), "text-anchor": "middle" }, svg).textContent = String(p * 100);
+    for (const [p, text] of RINGS) {
+      node("text", { class: "tick", x: 0, y: ((-p + 0.06) * S).toFixed(1), "text-anchor": "middle" }, svg).textContent = text;
     }
     ORDER.forEach((c, i) => {
       const [x, y] = RF.CORNER_XY[i];
@@ -451,8 +452,7 @@ td.dim { color: var(--muted); }
       node("polygon", { class: `shape c${slots.get(keyOf(p)) + 1}`, points: pts(p.points), "data-key": keyOf(p) }, g);
     }
     if (opts.outline) {
-      const vals = ORDER.map((c) => (res.pct[c] == null ? 0 : res.pct[c] / 100));
-      node("polygon", { class: "outline", points: pts(RF.shapePoints(vals, 1)) }, svg);
+      node("polygon", { class: "outline", points: pts(RF.shapePoints(res.outline, 1)) }, svg);
     }
     const cands = colored.map((p) => {
       const tip = p.points.reduce((a, b) => (Math.hypot(b[0], b[1]) > Math.hypot(a[0], a[1]) ? b : a));
@@ -737,21 +737,22 @@ td.dim { color: var(--muted); }
 
   function glyph(p, mine, slot) {
     const g = (vals) => RF.shapePoints(vals, 1).map(([x, y]) => `${x.toFixed(3)},${(-y).toFixed(3)}`).join(" ");
-    const vals = (q) => ORDER.map((c) => q.pct[CIDX[c]] / 100);
+    const vals = (q) => ORDER.map((c) => RF.radius(q.pct[CIDX[c]], M.qualified[q.season] || 1, M.scale));
     return `<svg class="glyph" viewBox="-1.08 -1.08 2.16 2.16" aria-hidden="true"><rect class="g-frame" x="-1" y="-1" width="2" height="2"/>`
       + mine.map((q) => `<polygon class="g-mine" points="${g(vals(q))}"/>`).join("")
       + `<polygon class="g-shape c${slot}" points="${g(vals(p))}"/></svg>`;
   }
 
+  const BEST_KEY = `rf-game-best-${M.scale || "percentile"}`;  // scores on different scales don't compare
   function bestScores() {
-    try { return JSON.parse(store.get("rf-game-best") || "{}") || {}; } catch (e) { return {}; }
+    try { return JSON.parse(store.get(BEST_KEY) || "{}") || {}; } catch (e) { return {}; }
   }
   function recordBest(score) {
     const best = bestScores();
     if (G.mode === "daily") {
       if (!best.daily || best.daily.date !== G.date || score > best.daily.score) best.daily = { date: G.date, score };
     } else if (!(best.free >= score)) best.free = score;
-    store.set("rf-game-best", JSON.stringify(best));
+    store.set(BEST_KEY, JSON.stringify(best));
   }
 
   function shareText(res) {
@@ -941,7 +942,8 @@ td.dim { color: var(--muted); }
   // glossary + sources
   const gloss = [
     ["Corners", ORDER.map((c) => `${M.labels[c]} (${M.descriptions[c]})`).join("; ") + "."],
-    ["Player shape", `Each corner is the player's percentile among qualified players that season (${M.min_gp}+ games, ${M.min_mpg}+ minutes a game). On team charts, a shape's area grows with minutes played.`],
+    ["Player shape", `Each corner comes from the player's percentile among qualified players that season (${M.min_gp}+ games, ${M.min_mpg}+ minutes a game)${M.scale === "rank" ? ", placed on the rank scale below" : ""}. On team charts, a shape's area grows with minutes played.`],
+    ...(M.scale === "rank" ? [["Scale", "Distance along each diagonal follows rank, not percentile. The best player in a corner reaches it, and every time your rank halves (20th to 10th to 5th), you move the same step outward: about 12% of the way among ~330 qualified players. So the 4th-best sits at 76%, the 20th-best at 48%, a median player at 12%: the top of the league stands apart the way it does on the court. The rings mark the top 5, 20 and 50. Team outlines use the same scale against all team-seasons."]] : []),
     ["Coverage", "How much of the square the players' shapes fill together: does anyone on the team cover each part of it?"],
     ["Depth", "The black outline: how much of each corner the whole rotation provides, weighted by minutes and ranked against every team-season in the data."],
     ["Overlap", "Shape area that two or more players share. Big overlap means players doing the same job."],

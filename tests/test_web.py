@@ -106,10 +106,11 @@ def test_browser_math_matches_python(league, data, tmp_path):
     assert lineup["weights"] == [1, 1, 1, 1, 1]
     order = league.cfg.corners.order
     table = league.players[lineup["picks"][0]["season"]].set_index("PLAYER_ID")
+    n = int(table["qualified"].sum())
     polys = []
     for pick in lineup["picks"]:
         row = table.loc[pick["pid"]]
-        vals = {c: row[f"{c}_pct"] / 100 for c in CORNERS}
+        vals = {c: geometry.radius(row[f"{c}_pct"], n, league.cfg.drawing.scale) for c in CORNERS}
         polys.append(geometry.to_polygon(geometry.shape_points(vals, order)))
     assert lineup["coverage"] == pytest.approx(geometry.union_fraction(polys), abs=2e-3)
 

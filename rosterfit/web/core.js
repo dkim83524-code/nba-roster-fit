@@ -2,7 +2,7 @@
  * No DOM access here, so Node can load it for the parity test against Python.
  *
  * Square: [-1, 1] x [-1, 1] (area 4); corners clockwise from top-left. A shape puts a vertex on
- * each center-to-corner diagonal at (percentile / 100) of the way to that corner.
+ * each center-to-corner diagonal at distance radius(percentile) of the way to that corner.
  */
 (function (root) {
   "use strict";
@@ -12,6 +12,24 @@
 
   function cross(ax, ay, bx, by) {
     return ax * by - ay * bx;
+  }
+
+  /* Distance from the center (0-1) for a percentile among n players (or team-seasons); same as
+   * geometry.radius in Python. "percentile": pct / 100. "rank": 1 - ln(rank) / ln(1 + n), rank = 1 +
+   * players ahead: the best reaches the corner and every halving of the rank adds the same step. */
+  function radius(pct, n, scale) {
+    if (pct == null || Number.isNaN(pct)) return null;
+    const p = Math.min(Math.max(pct / 100, 0), 1);
+    if (scale !== "rank") return p;
+    const m = Math.max(n || 1, 1);
+    return 1 - Math.log1p(m * (1 - p)) / Math.log1p(m);
+  }
+
+  /* Guide rings as [distance, label]: top 5 / 20 / 50 on the rank scale, 25 / 50 / 75 otherwise. */
+  function rings(n, scale) {
+    if (scale !== "rank") return [0.25, 0.5, 0.75].map((p) => [p, String(p * 100)]);
+    const m = Math.max(n || 1, 1);
+    return [5, 20, 50].map((k) => [1 - Math.log(k) / Math.log1p(m), `top ${k}`]);
   }
 
   function shapePoints(vals, scale) {
@@ -126,7 +144,10 @@
     }
     const pct = {};
     for (const c of corners) pct[c] = pctAgainst(ctx.pools[c], values[c]);
-    const depth = shapeArea(order.map((c) => (pct[c] == null ? 0 : pct[c] / 100)), 1);
+    const sc = m.scale || "percentile";
+    const outline = order.map((c) => radius(pct[c], (ctx.pools[c] || []).length, sc) || 0);
+    const depth = shapeArea(outline, 1);
+    const nOf = (season) => (m.qualified && m.qualified[season]) || 1;
 
     for (const p of players) {
       const complete = p.pct.every((v) => v != null);
@@ -142,7 +163,7 @@
         p.area = null;
         continue;
       }
-      p.vals = order.map((c) => p.pct[idx[c]] / 100);
+      p.vals = order.map((c) => radius(p.pct[idx[c]], nOf(p.season), sc));
       p.points = shapePoints(p.vals, p.scale);
       p.area = shapeArea(p.vals, p.scale);
       if (p.area > 1e-12) {
@@ -152,7 +173,7 @@
     }
     const coverage = unionArea(shapes);
     return {
-      players, values, uncapped, redundancy, redundancyPlayers, missing, pct, depth,
+      players, values, uncapped, redundancy, redundancyPlayers, missing, pct, outline, depth,
       coverage, sumAreas, overlap: Math.max(sumAreas - coverage, 0),
     };
   }
@@ -330,7 +351,7 @@
   }
 
   const api = {
-    CORNER_XY, shapePoints, shapeArea, unionArea, pctAgainst, evaluate, playerIndex, entriesFor,
+    CORNER_XY, radius, rings, shapePoints, shapeArea, unionArea, pctAgainst, evaluate, playerIndex, entriesFor,
     teamContext, evaluateTeam, evaluateLineup, assignColors, placeLabels,
     seededRandom, hashSeed, dealOrder, signingFloor, canAfford,
   };

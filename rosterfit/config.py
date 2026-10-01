@@ -125,6 +125,7 @@ class PlayoffsCfg:
 class DrawingCfg:
     theme: str = "light"
     minutes_scaling: str = "area"
+    scale: str = "rank"
     team_outline: bool = True
     min_minutes_to_draw: float = 100
     max_colored_players: int = 8
@@ -205,6 +206,8 @@ def validate(cfg: Config) -> None:
     cfg.window_seasons  # validates the season strings
     if cfg.drawing.minutes_scaling not in ("area", "none"):
         raise ValueError("drawing.minutes_scaling must be 'area' or 'none'")
+    if cfg.drawing.scale not in ("rank", "percentile"):
+        raise ValueError("drawing.scale must be 'rank' or 'percentile'")
     if cfg.drawing.theme not in ("light", "dark"):
         raise ValueError("drawing.theme must be 'light' or 'dark'")
     if not 0 < cfg.team.cap_reference_percentile < 100:
