@@ -4,7 +4,7 @@ import pytest
 
 from rosterfit.cache import Cache
 from rosterfit.config import load_config
-from rosterfit.synthetic import make_league
+from rosterfit.synthetic import make_league, use_synthetic_sources
 from rosterfit.team import build_league
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,7 +27,7 @@ def synthetic_dirs(tmp_path_factory):
 @pytest.fixture
 def league(cfg, synthetic_dirs):
     cache_dir, impact_dir = synthetic_dirs
-    cfg.impact.dir = str(impact_dir)
+    use_synthetic_sources(cfg, impact_dir)
     cfg.seasons.window = [SEASONS[0], SEASONS[-1]]
     cfg.qualified.min_gp = 10
     return build_league(cfg, Cache(cache_dir), SEASONS)

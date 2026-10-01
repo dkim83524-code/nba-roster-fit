@@ -7,7 +7,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, get_type_hints
+from typing import Any, get_args, get_origin, get_type_hints
 
 import yaml
 
@@ -42,14 +42,49 @@ class MultiYearCfg:
 
 
 @dataclass
+class SourceCfg:
+    """One plus-minus source with offense and defense halves, from CSVs saved by hand."""
+    dir: str = ""
+    url: str = ""
+    columns: dict[str, list[str]] = field(default_factory=dict)
+    numeric_season_is_end_year: bool = True
+    defense_higher_is_better: bool = True
+    name_overrides: dict[str, int | str] = field(default_factory=dict)
+
+
+IMPACT_CORNERS = ("offense", "defense")
+
+
+@dataclass
 class ImpactCfg:
+    # the main source (DARKO), kept at the top level so older config.local.yaml files still load
     source_name: str = "DARKO"
     dir: str = "data/manual/darko"
+    url: str = "https://www.darko.app"
     columns: dict[str, list[str]] = field(default_factory=dict)
     numeric_season_is_end_year: bool = True
     defense_higher_is_better: bool = True
     defense_multi_year: MultiYearCfg = field(default_factory=MultiYearCfg)
     name_overrides: dict[str, int | str] = field(default_factory=dict)
+    extra_sources: dict[str, SourceCfg] = field(default_factory=dict)
+    # corner -> source name -> weight; a corner left out uses the main source alone
+    weights: dict[str, dict[str, float]] = field(default_factory=dict)
+    min_weight_present: float = 0.2
+
+    def sources(self) -> dict[str, SourceCfg]:
+        main = SourceCfg(dir=self.dir, url=self.url, columns=self.columns,
+                         numeric_season_is_end_year=self.numeric_season_is_end_year,
+                         defense_higher_is_better=self.defense_higher_is_better,
+                         name_overrides=self.name_overrides)
+        return {self.source_name: main, **self.extra_sources}
+
+    def weights_for(self, corner: str) -> dict[str, float]:
+        return dict(self.weights.get(corner) or {self.source_name: 1.0})
+
+    def active_sources(self) -> list[str]:
+        """Sources with weight in either corner, in config order."""
+        used = {n for c in IMPACT_CORNERS for n, w in self.weights_for(c).items() if w > 0}
+        return [n for n in self.sources() if n in used]
 
 
 @dataclass
@@ -145,8 +180,14 @@ def _build(cls: type, data: dict[str, Any] | None, where: str):
     kwargs = {}
     for name, value in data.items():
         hint = hints[name]
+        path = f"{where}.{name}" if where else name
+        args = get_args(hint)
         if dataclasses.is_dataclass(hint):
-            kwargs[name] = _build(hint, value, f"{where}.{name}" if where else name)
+            kwargs[name] = _build(hint, value, path)
+        elif get_origin(hint) is dict and len(args) == 2 and dataclasses.is_dataclass(args[1]):
+            if not isinstance(value or {}, dict):
+                raise ValueError(f"config section '{path}' must be a mapping")
+            kwargs[name] = {k: _build(args[1], v, f"{path}.{k}") for k, v in (value or {}).items()}
         else:
             kwargs[name] = value
     return cls(**kwargs)
@@ -172,6 +213,18 @@ def validate(cfg: Config) -> None:
         raise ValueError("team.cap_mode must be 'pool_percentile' or 'players_worth'")
     if not 0 < cfg.team.cap_pool_percentile <= 100:
         raise ValueError("team.cap_pool_percentile must be in (0, 100]")
+    sources = cfg.impact.sources()
+    for corner, weights in cfg.impact.weights.items():
+        if corner not in IMPACT_CORNERS:
+            raise ValueError(f"impact.weights: '{corner}' isn't offense or defense")
+        unknown = set(weights) - set(sources)
+        if unknown:
+            raise ValueError(f"impact.weights.{corner}: unknown source(s) {sorted(unknown)}; "
+                             f"sources are {sorted(sources)} (add others under impact.extra_sources)")
+        if any(w < 0 for w in weights.values()) or sum(weights.values()) <= 0:
+            raise ValueError(f"impact.weights.{corner}: weights must be >= 0 with at least one > 0")
+    if not 0 < cfg.impact.min_weight_present <= 1:
+        raise ValueError("impact.min_weight_present must be in (0, 1]")
     for section in (cfg.playmaking, cfg.portability):
         if section.component_scaling not in ("z", "rank"):
             raise ValueError("component_scaling must be 'z' or 'rank'")

@@ -6,6 +6,7 @@
     python -m rosterfit plot --team NYK --playoffs  # top-8 playoff rotation
     python -m rosterfit compare --team NYK --vs SAS --playoffs   # two teams side by side
     python -m rosterfit explain --team NYK          # ingredients behind playmaking and portability
+    python -m rosterfit explain --team DEN --corner defense   # LEBRON and DARKO behind "Stops"
     python -m rosterfit demo                        # synthetic league, no network needed
     python -m rosterfit export-web                  # the website: one HTML page + its data file
     python -m rosterfit browser-script              # if fetch can't connect: download from your browser
@@ -95,6 +96,45 @@ def cmd_fetch(cfg: Config, args) -> int:
     return 0
 
 
+def _check_source(cfg: Config, league, seasons: list[str], name: str, rep, min_minutes: float) -> None:
+    src = cfg.impact.sources()[name]
+    print(f"\n{name} files in {rep.dir}: {len(rep.files)}  (seasons: {', '.join(rep.seasons) or 'none'})")
+    for file in rep.files[:3]:
+        print(f"  {file}: columns used {rep.columns[file]}")
+    if len(rep.files) > 3:
+        print(f"  ... and {len(rep.files) - 3} more")
+    if rep.loose:
+        print("  Matched by last name or word order (worth a glance):")
+        for season, pairs in sorted(rep.loose.items()):
+            print(f"    {season}: " + ", ".join(f"{a} -> {b}" for a, b in pairs))
+    col = f"offense_src_{name}"
+    gaps = []
+    for season in seasons:
+        p = league.players.get(season)
+        if p is None or season not in rep.seasons or col not in p:
+            continue
+        gap = p[p[col].isna() & (p["MIN"] >= min_minutes)].sort_values("MIN", ascending=False)
+        gaps += [(season, n, m) for n, m in zip(gap["PLAYER_NAME"], gap["MIN"])]
+    if gaps:
+        print(f"  Played {min_minutes:g}+ minutes but have no {name} value: {len(gaps)}")
+        for season, player, mins in gaps[:10]:
+            last = normalize_name(player).split()[-1:]
+            maybe = [c for c in rep.unmatched.get(season, []) if normalize_name(c).split()[-1:] == last]
+            hint = f"   {name} has: {', '.join(maybe)}" if maybe else ""
+            print(f"    {season}  {player} ({mins:,.0f} min){hint}")
+        if len(gaps) > 10:
+            print(f"    ... and {len(gaps) - 10} more")
+        if not src.columns.get("player_id") or rep.unmatched:
+            print(f"  A name mismatch is fixed under the {name} source's name_overrides in config.yaml:\n"
+                  f"    \"Name In The {name} CSV\": \"Name On NBA.com\"")
+    elif rep.seasons:
+        print(f"  Every player with {min_minutes:g}+ minutes has a {name} value.")
+    unmatched = sum(len(v) for v in rep.unmatched.values())
+    if unmatched:
+        print(f"  ({unmatched} {name} rows across all seasons are players with no NBA.com minutes "
+              "that season, e.g. injured all year; they're ignored.)")
+
+
 def cmd_check(cfg: Config, args) -> int:
     from .metrics.players import required_tables
 
@@ -104,7 +144,7 @@ def cmd_check(cfg: Config, args) -> int:
     print(f"Required tables: {', '.join(need)}  (+ playoff game logs for --playoffs)")
     print(f"{'season':<9}" + "".join(f"{t:<13}" for t in need) + "playoffs     impact")
     league = build_league(cfg, cache, seasons)
-    impact_seasons = set(league.impact_report.seasons)
+    reports = league.impact_reports
     for season in seasons:
         cells = []
         for t in need:
@@ -113,43 +153,14 @@ def cmd_check(cfg: Config, args) -> int:
             else:
                 cells.append("ok" if cache.has(season, REGULAR, t) else "MISSING")
         po = "ok" if cache.has(season, PLAYOFFS, "gamelog") else "-"
-        imp = "ok" if season in impact_seasons else "MISSING"
+        lacking = [n for n, r in reports.items() if season not in r.seasons]
+        imp = "ok" if not lacking else "MISSING " + ", ".join(lacking)
         print(f"{season:<9}" + "".join(f"{c:<13}" for c in cells) + f"{po:<13}{imp}")
-    rep = league.impact_report
-    print(f"\n{cfg.impact.source_name} files in {cfg.path(cfg.impact.dir)}: {len(rep.files)}")
-    for name in rep.files:
-        print(f"  {name}: columns used {rep.columns[name]}")
-    if rep.loose:
-        print("\nMatched by last name or word order (worth a glance):")
-        for season, pairs in sorted(rep.loose.items()):
-            print(f"  {season}: " + ", ".join(f"{a} -> {b}" for a, b in pairs))
-    missing_players = False
-    for season in seasons:
-        p = league.players.get(season)
-        if p is None or season not in impact_seasons:
-            continue
-        gap = p[p["offense_raw"].isna() & (p["MIN"] >= args.min_minutes)].sort_values("MIN", ascending=False)
-        if len(gap):
-            if not missing_players:
-                print(f"\nPlayed {args.min_minutes:g}+ minutes but have no {cfg.impact.source_name} value:")
-                missing_players = True
-            candidates = rep.unmatched.get(season, [])
-            for name, mins in list(zip(gap["PLAYER_NAME"], gap["MIN"]))[:10]:
-                last = normalize_name(name).split()[-1:]
-                maybe = [c for c in candidates if normalize_name(c).split()[-1:] == last]
-                hint = f"   {cfg.impact.source_name} has: {', '.join(maybe)}" if maybe else ""
-                print(f"  {season}  {name} ({mins:,.0f} min){hint}")
-            if len(gap) > 10:
-                print(f"  {season}  ... and {len(gap) - 10} more")
-    if missing_players:
-        print(f"  Fix under impact.name_overrides in config.yaml, e.g.\n"
-              f"    name_overrides:\n      \"Name In The {cfg.impact.source_name} CSV\": \"Name On NBA.com\"")
-    elif impact_seasons:
-        print(f"\nEvery player with {args.min_minutes:g}+ minutes has a {cfg.impact.source_name} value.")
-    unmatched = sum(len(v) for v in rep.unmatched.values())
-    if unmatched:
-        print(f"({unmatched} {cfg.impact.source_name} rows across all seasons are players with no NBA.com minutes "
-              "that season, e.g. injured all year; they're ignored.)")
+    weights = {c: cfg.impact.weights_for(c) for c in ("offense", "defense")}
+    print("\nOffense and defense blend: " + "; ".join(
+        f"{c} " + " + ".join(f"{n} x{w:g}" for n, w in ws.items() if w > 0) for c, ws in weights.items()))
+    for name, rep in reports.items():
+        _check_source(cfg, league, seasons, name, rep, args.min_minutes)
     print(f"\nTeam pool: {len(league.pool_seasons)} complete season(s) in the window: "
           f"{', '.join(league.pool_seasons) or 'none'}")
     for season, missing in sorted(league.incomplete.items()):
@@ -247,7 +258,7 @@ def cmd_browser_script(cfg: Config, args) -> int:
 
 
 def cmd_explain(cfg: Config, args) -> int:
-    from .explain import format_table, ingredients
+    from .explain import corner_scaling, corner_weights, format_table, ingredients
 
     season = args.season or cfg.seasons.target
     league = build_league(cfg, _open_cache(cfg), [season])
@@ -260,13 +271,12 @@ def cmd_explain(cfg: Config, args) -> int:
         print(f"error: no {season} minutes for {team}", file=sys.stderr)
         return 2
     n = int(league.players[season]["qualified"].sum())
-    corners = ["playmaking", "portability"] if args.corner == "both" else [args.corner]
+    corners = {"both": ["playmaking", "portability"], "all": list(cfg.corners.order)}.get(args.corner, [args.corner])
     for corner in corners:
         table = ingredients(league.players[season], minutes, team, corner, cfg, args.top)
-        section = getattr(cfg, corner)
         title = (f"\n{cfg.label(corner)} ({corner}) - {team} {season}: percentile on each ingredient "
                  f"among {n} qualified players")
-        print(format_table(table, title, section.weights, section.component_scaling))
+        print(format_table(table, title, corner_weights(cfg, corner), corner_scaling(cfg, corner)))
     return 0
 
 
@@ -320,11 +330,11 @@ def cmd_demo(cfg: Config, args) -> int:
 
 
 def _demo_league(cfg: Config, tmp: Path):
-    from .synthetic import make_league
+    from .synthetic import make_league, use_synthetic_sources
 
     seasons = ["2023-24", "2024-25", "2025-26"]
     cache_dir, impact_dir = make_league(tmp, seasons)
-    cfg.impact.dir = str(impact_dir)
+    use_synthetic_sources(cfg, impact_dir)
     cfg.seasons.window = [seasons[0], seasons[-1]]
     return build_league(cfg, Cache(cache_dir), seasons)
 
@@ -418,10 +428,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", help="output PNG path (a CSV with the same name is written next to it)")
     p.set_defaults(func=cmd_compare)
 
-    p = sub.add_parser("explain", help="show the ingredients behind playmaking and portability for a team")
+    p = sub.add_parser("explain", help="show the ingredients behind a team's corners")
     p.add_argument("--team", required=True)
     p.add_argument("--season", help="default: seasons.target in config.yaml")
-    p.add_argument("--corner", choices=["playmaking", "portability", "both"], default="both")
+    p.add_argument("--corner", choices=["playmaking", "portability", "offense", "defense", "both", "all"],
+                   default="both", help="both = playmaking and portability; all = every corner")
     p.add_argument("--top", type=int, default=10, help="how many players, by minutes")
     p.set_defaults(func=cmd_explain)
 
