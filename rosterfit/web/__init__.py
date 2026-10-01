@@ -13,6 +13,8 @@ from pathlib import Path
 import pandas as pd
 
 from ..config import CORNERS, Config
+from ..sources.contracts import SOURCE_NAME, SOURCE_URL
+from ..sources.names import match_names
 from ..team import PLAYOFF_MODE, REGULAR_MODE, League, select_roster, team_name
 
 HERE = Path(__file__).parent
@@ -105,6 +107,39 @@ def build_web_data(league: League, cfg: Config, synthetic: bool = False,
         "caps": caps,
         "one_worth": one_worth,
     }
+
+
+def add_game(data: dict, contract_season: str, contracts: pd.DataFrame, cap: float,
+             min_minutes: float = 500) -> dict:
+    """Add the cap game's deck: every player with a contract that season and a full shape from the
+    latest stats season (min_minutes or more). Contracts are matched to players by name, or by a
+    PLAYER_ID column when there is one. Returns counts, plus the contract names that matched no
+    player, biggest salaries first.
+    """
+    stats_season = data["meta"]["seasons"][-1]
+    rows = {r[0]: r for r in data["players"][stats_season]}
+    roster = pd.DataFrame({"PLAYER_ID": list(rows), "PLAYER_NAME": [r[1] for r in rows.values()]})
+    given = "PLAYER_ID" in contracts.columns  # ids already known (the demo); otherwise match names
+    matched = {} if given else match_names(contracts["name"], roster)[0]
+    n = len(CORNERS)
+    deck, unmatched = [], []
+    for c in contracts.itertuples(index=False):
+        r = rows.get(int(c.PLAYER_ID) if given else matched.get(c.name))
+        if r is None:
+            unmatched.append(c.name)
+        elif (r[4] or 0) >= min_minutes and all(v is not None for v in r[6:6 + 2 * n]):
+            deck.append([r[0], int(c.salary), c.team])
+    data["game"] = {
+        "contract_season": contract_season,
+        "stats_season": stats_season,
+        "cap": float(cap),
+        "min_minutes": min_minutes,
+        "source": SOURCE_NAME,
+        "source_url": SOURCE_URL,
+        "deck": sorted(deck, key=lambda d: -d[1]),
+    }
+    return {"contracts": len(contracts), "matched": len(contracts) - len(unmatched), "deck": len(deck),
+            "unmatched": unmatched}
 
 
 def render_page(data: dict) -> str:

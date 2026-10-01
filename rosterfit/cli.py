@@ -329,6 +329,37 @@ def _demo_league(cfg: Config, tmp: Path):
     return build_league(cfg, Cache(cache_dir), seasons)
 
 
+def _add_cap_game(cfg: Config, args, data: dict) -> int:
+    from .sources.contracts import SALARY_CAPS, find_contracts_file, read_contracts
+    from .synthetic import make_contracts
+    from .web import add_game
+
+    if args.demo:
+        season, contracts = "2026-27", make_contracts(data)
+    else:
+        folder = cfg.path("data/manual/contracts")
+        path = Path(args.contracts) if args.contracts else find_contracts_file(folder)
+        if path is None:
+            print(f"Cap game left out: no contracts table in {folder}/ (see README).")
+            return 0
+        try:
+            season, contracts = read_contracts(path)
+        except (OSError, ValueError) as err:
+            print(f"error: can't read contracts from {path}: {err}", file=sys.stderr)
+            return 2
+    cap = args.cap or SALARY_CAPS.get(season)
+    if cap is None:
+        print(f"error: no official salary cap on file for {season}; pass --cap in dollars", file=sys.stderr)
+        return 2
+    info = add_game(data, season, contracts, cap)
+    print(f"Cap game: {season} contracts, cap ${cap / 1e6:.3f}M. {info['deck']} of {info['contracts']} "
+          f"players are in the deck; {len(info['unmatched'])} played no {data['game']['stats_season']} games")
+    if info["unmatched"]:
+        print("  (rookies, injuries, or a name that didn't match): " + ", ".join(info["unmatched"][:12])
+              + (" ..." if len(info["unmatched"]) > 12 else ""))
+    return 0
+
+
 def cmd_export_web(cfg: Config, args) -> int:
     from .web import build_web_data, write_web
 
@@ -344,6 +375,9 @@ def cmd_export_web(cfg: Config, args) -> int:
         if league.incomplete:
             print("warning: some seasons are incomplete; run `check` to see what's missing", file=sys.stderr)
         data = build_web_data(league, cfg)
+    status = _add_cap_game(cfg, args, data)
+    if status:
+        return status
     paths = write_web(data, out_dir)
     n_teams = sum(len(t) for t in data["teams"].values())
     print(f"{len(data['meta']['seasons'])} seasons, {n_teams} team-seasons")
@@ -394,6 +428,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("export-web", help="write the Roster Fit website (one HTML page) and its data file")
     p.add_argument("--seasons", help="'2017-18:2025-26' (default: the window + target)")
     p.add_argument("--demo", action="store_true", help="made-up league, no downloads needed")
+    p.add_argument("--contracts", help="Basketball-Reference contracts table for the cap game "
+                                       "(default: the newest file in data/manual/contracts/)")
+    p.add_argument("--cap", type=float, help="salary cap in dollars (default: the official cap for the contracts' season)")
     p.add_argument("--out", help="output folder (default: outputs/web)")
     p.set_defaults(func=cmd_export_web)
 

@@ -170,6 +170,18 @@ It has three tools:
 - **Lineup builder:** pick five players from any season. Each plays equal starter minutes, and the
   page scores the lineup with the same math as the Python package.
 
+- **Cap game:** five rounds; each deals you one team's roster and you sign one player, staying under
+  the real salary cap with 3 rerolls a game. Score: how much of the square your five fill. The daily
+  deal is the same for everyone that day, so friends can compare.
+
+The cap game needs this season's contracts. On
+[Basketball-Reference's contracts page](https://www.basketball-reference.com/contracts/players.html)
+use Share & Export -> "Get as Excel Workbook" (or "Get table as CSV") and save the file in
+`data/manual/contracts/`; `export-web` picks up the newest one. Salaries are priced against the
+official cap for that season (`SALARY_CAPS` in `sources/contracts.py`; `--cap` overrides it), and
+shapes come from the latest stats season, for players with 500+ minutes. Sports Reference asks to be
+cited with a link, which the page does.
+
 `rosterfit/web/core.js` repeats the team math for the browser, and `tests/test_web.py` checks it
 against `team.py` on every team in the synthetic league. The page and `roster-fit-data.json`
 contain NBA.com and DARKO numbers, so `outputs/` stays git-ignored: share the page privately, and
@@ -197,6 +209,8 @@ impact:
   are paced at one per second and cached. Check NBA.com's terms of use yourself; this is meant for
   personal, non-commercial analysis.
 - **DARKO** ([darko.app](https://www.darko.app)): free, with CSV downloads on the site.
+- **Contracts** ([Basketball-Reference](https://www.basketball-reference.com/contracts/players.html)),
+  for the website's cap game only: saved by hand from the site's export menu, cited with a link.
 - **Not used:** EPM (paid subscription and API tier) and LEBRON (free to view, but no bulk
   download is offered). Third-party GitHub mirrors of LEBRON redistribute it without a license.
 - Downloaded data is git-ignored. Don't commit it to a public repo.
@@ -208,7 +222,8 @@ rosterfit/
   config.py           load + validate config.yaml
   cache.py            parquet cache: data/cache/<season>/<regular|playoffs>/<table>.parquet
   sources/            nba_stats.py (nba_api), manual_nba.py (files saved from the browser),
-                      darko.py (your CSVs), formulas.py (Taylor's formulas)
+                      darko.py (your CSVs), formulas.py (Taylor's formulas),
+                      contracts.py (Basketball-Reference contracts, for the cap game)
   metrics/            offense_defense, playmaking, portability, pool (z / percentiles), players
   team.py             weights, caps, redundancy, team percentiles, coverage, overlap
   geometry.py         shapes, areas, union (shapely)

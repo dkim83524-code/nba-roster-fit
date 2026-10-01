@@ -62,7 +62,7 @@ button, select, input { font: inherit; color: inherit; }
   font: 600 18px var(--font-display); letter-spacing: .03em; color: var(--ink-2); }
 .tab:hover { color: var(--ink); }
 .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
-@media (max-width: 480px) { .top { gap: 8px 20px; } .tabs { flex-wrap: nowrap; gap: 0; } .tab { padding: 6px 8px 5px; font-size: 16.5px; white-space: nowrap; } }
+@media (max-width: 480px) { .top { gap: 8px 20px; } .tabs { flex-wrap: nowrap; gap: 0; max-width: 100%; overflow-x: auto; } .tab { padding: 6px 8px 5px; font-size: 16.5px; white-space: nowrap; } }
 .notice { margin-top: 12px; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: 14px; }
 
 /* controls */
@@ -177,6 +177,45 @@ td.dim { color: var(--muted); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
 .muted { color: var(--muted); }
 
+/* cap game */
+.game-rules { margin: 0 0 8px; max-width: 62ch; font-size: 14px; }
+.budget-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.budget-head b { font: 700 32px/1 var(--font-display); }
+.budget-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--grid); margin: 10px 0 8px; }
+.budget-bar span { display: block; height: 100%; background: var(--c); }
+.budget-bar span + span { box-shadow: inset 2px 0 0 var(--surface); }
+.budget-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 13.5px; color: var(--ink-2); }
+.pips i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--accent); margin-left: 4px; vertical-align: 0; }
+.pips i.on { background: var(--accent); }
+.deal-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 12px; margin-bottom: 8px; }
+.deal-head h2 { font-size: 30px; line-height: 1.05; }
+.cands { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.cand { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 6px 6px; border-radius: 10px; border: 1px solid transparent; }
+.cand:hover { border-color: var(--line); background: var(--surface-2); }
+.cand.over { opacity: .5; }
+.cand .who { min-width: 0; }
+.cand .who b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cand .meta { font-size: 12.5px; color: var(--muted); }
+.cand .price { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cand .price b { font-weight: 600; }
+.cand .gain { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.glyph { display: block; width: 44px; height: 44px; }
+.glyph .g-frame { fill: none; stroke: var(--axis); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.glyph .g-mine { fill: var(--other); fill-opacity: .3; stroke: none; }
+.glyph .g-shape { fill: var(--c); fill-opacity: .3; stroke: var(--c); stroke-width: 1.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.final { font: 700 76px/1 var(--font-display); margin-top: 4px; }
+.share-text { width: 100%; min-height: 96px; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--surface-2); font: 13px/1.4 var(--font-body); resize: vertical; }
+.game-foot { margin: 16px 0 0; font-size: 13px; }
+.game-foot a { color: inherit; }
+@media (max-width: 560px) {
+  .cand { grid-template-columns: 34px minmax(0, 1fr) auto; gap: 4px 10px; padding: 8px 2px; }
+  .cand .glyph { width: 34px; height: 34px; grid-row: 1 / span 2; align-self: start; }
+  .cand .who { grid-column: 2 / 4; }
+  .cand .price { grid-column: 2; text-align: left; }
+  .cand .gain { display: inline; margin-left: 6px; }
+  .cand .btn { grid-column: 3; padding: 6px 12px; }
+}
+
 /* footer */
 .foot { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 10px; font-size: 13.5px; color: var(--ink-2); }
 .foot details { max-width: 72ch; }
@@ -196,7 +235,8 @@ td.dim { color: var(--muted); }
     <nav class="tabs" role="tablist" aria-label="Tools">
       <button class="tab" role="tab" id="tab-teams" aria-controls="view-teams" aria-selected="true">Teams</button>
       <button class="tab" role="tab" id="tab-compare" aria-controls="view-compare" aria-selected="false">Compare</button>
-      <button class="tab" role="tab" id="tab-builder" aria-controls="view-builder" aria-selected="false">Lineup builder</button>
+      <button class="tab" role="tab" id="tab-builder" aria-controls="view-builder" aria-selected="false">Builder</button>
+      <button class="tab" role="tab" id="tab-game" aria-controls="view-game" aria-selected="false" hidden>Cap game</button>
     </nav>
   </header>
   <p class="notice" id="synthetic-notice" hidden>Preview with a made-up league: the teams, names and numbers aren't real.</p>
@@ -282,6 +322,31 @@ td.dim { color: var(--muted); }
         <div id="builder-panel" class="panel"></div>
       </div>
     </div>
+  </section>
+
+  <section class="view" id="view-game" role="tabpanel" aria-labelledby="tab-game" hidden>
+    <div class="controls">
+      <div class="field"><span>Mode</span>
+        <div class="seg" role="group" aria-label="Mode">
+          <button class="seg-btn" id="game-mode-daily" aria-pressed="true">Daily deal</button>
+          <button class="seg-btn" id="game-mode-free" aria-pressed="false">Free play</button>
+        </div>
+      </div>
+      <button class="btn" id="game-new">New game</button>
+    </div>
+    <p class="game-rules muted" id="game-rules"></p>
+    <div class="split">
+      <div class="builder-side" id="game-side"></div>
+      <div class="panel">
+        <figure class="card" style="margin:0">
+          <div class="chart-title"><h2>Your five</h2><span id="game-caption"></span></div>
+          <svg class="square" id="game-svg" role="img"></svg>
+          <p class="hint" id="game-hint">Hover a shape or a row to pick out one player.</p>
+        </figure>
+        <div id="game-panel" class="panel"></div>
+      </div>
+    </div>
+    <p class="muted game-foot" id="game-foot"></p>
   </section>
 
   <footer class="foot">
@@ -592,8 +657,198 @@ td.dim { color: var(--muted); }
       .filter((p) => p && p.pct.every((v) => v != null)).slice(0, 5).map(keyOf);
   }
 
+  /* ---- Cap game ---------------------------------------------------------------------------- */
+  const GAME = DATA.game || null;
+  const SPOTS = 5;
+  const REROLLS = 3;
+  const money = (v, d = 1) => `$${(v / 1e6).toFixed(d)}M`;
+  const DECK = new Map();  // team -> players with a contract, highest salary first
+  let floor = 0;  // cap kept in hand per open spot (see RF.signingFloor)
+  if (GAME) {
+    for (const [pid, salary, team] of GAME.deck) {
+      const p = INDEX[GAME.stats_season].get(pid);
+      if (!p) continue;
+      if (!DECK.has(team)) DECK.set(team, []);
+      DECK.get(team).push({ ...p, salary, dealt: team });
+    }
+    floor = RF.signingFloor([...DECK.values()].map((list) => list.map((p) => p.salary)));
+  }
+  const DECK_TEAMS = [...DECK.keys()].sort();
+  const teamName = (abbr) => ((DATA.teams[GAME.stats_season] || {})[abbr] || { name: abbr }).name;
+  const todayKey = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  let G = null;
+
+  function newGame(mode) {
+    const date = todayKey();
+    const seed = mode === "daily" ? RF.hashSeed(`${GAME.contract_season}|${date}`) : Math.floor(Math.random() * 2 ** 32);
+    G = { mode, date, seed, draws: 0, current: null, picks: [], rerolls: REROLLS, done: false };
+    deal();
+  }
+  /* Next team in this game's order that you haven't signed from and isn't on the table now. */
+  function deal() {
+    const order = RF.dealOrder(DECK_TEAMS, G.seed);
+    const used = new Set(G.picks.map((p) => p.team));
+    for (let i = 0; i < order.length * 2; i++) {
+      const t = order[G.draws % order.length];
+      G.draws += 1;
+      if (!used.has(t) && t !== G.current) { G.current = t; return; }
+    }
+  }
+  const spent = () => G.picks.reduce((s, p) => s + p.salary, 0);
+  const gamePlayers = () => G.picks.map((p) => INDEX[GAME.stats_season].get(p.pid));
+  const lineupOf = (players) => RF.evaluateLineup(DATA, INDEX, players.map((p) => ({ season: p.season, pid: p.pid })));
+
+  function glyph(p, mine, slot) {
+    const g = (vals) => RF.shapePoints(vals, 1).map(([x, y]) => `${x.toFixed(3)},${(-y).toFixed(3)}`).join(" ");
+    const vals = (q) => ORDER.map((c) => q.pct[CIDX[c]] / 100);
+    return `<svg class="glyph" viewBox="-1.08 -1.08 2.16 2.16" aria-hidden="true"><rect class="g-frame" x="-1" y="-1" width="2" height="2"/>`
+      + mine.map((q) => `<polygon class="g-mine" points="${g(vals(q))}"/>`).join("")
+      + `<polygon class="g-shape c${slot}" points="${g(vals(p))}"/></svg>`;
+  }
+
+  function bestScores() {
+    try { return JSON.parse(store.get("rf-game-best") || "{}") || {}; } catch (e) { return {}; }
+  }
+  function recordBest(score) {
+    const best = bestScores();
+    if (G.mode === "daily") {
+      if (!best.daily || best.daily.date !== G.date || score > best.daily.score) best.daily = { date: G.date, score };
+    } else if (!(best.free >= score)) best.free = score;
+    store.set("rf-game-best", JSON.stringify(best));
+  }
+
+  function shareText(res) {
+    const head = G.mode === "daily" ? `Daily deal ${G.date}` : "Free play";
+    const names = G.picks.map((p) => `${INDEX[GAME.stats_season].get(p.pid).name} ${money(p.salary)}`).join(" · ");
+    return `Roster Fit cap game · ${head}\nCoverage ${(res.coverage * 100).toFixed(1)}% · ${money(spent())} of ${money(GAME.cap, 2)} cap\n${names}`;
+  }
+
+  function renderGame() {
+    if (!GAME) return;
+    $("game-mode-daily").setAttribute("aria-pressed", String(G.mode === "daily"));
+    $("game-mode-free").setAttribute("aria-pressed", String(G.mode === "free"));
+    const players = gamePlayers();
+    const res = lineupOf(players);
+    const left = GAME.cap - spent();
+    const round = G.picks.length + 1;
+
+    const segs = G.picks.map((p, i) => `<span class="c${i + 1}" style="width:${(100 * p.salary / GAME.cap).toFixed(2)}%" title="${esc(INDEX[GAME.stats_season].get(p.pid).name)} ${money(p.salary)}"></span>`).join("");
+    const pips = Array.from({ length: REROLLS }, (_, i) => `<i class="${i < G.rerolls ? "on" : ""}"></i>`).join("");
+    let html = `<div class="card"><div class="budget-head"><span class="stat-label">Cap space</span><b>${money(left, 2)}</b>
+        <span class="muted">left of ${money(GAME.cap, 2)}</span></div>
+      <div class="budget-bar" role="img" aria-label="${money(spent())} of ${money(GAME.cap, 2)} spent">${segs}</div>
+      <div class="budget-meta"><span>${G.done ? "All five signed" : `Pick ${round} of ${SPOTS}`}</span>
+        <span class="pips" aria-label="${G.rerolls} rerolls left">Rerolls${pips}</span></div></div>`;
+
+    if (!G.done) {
+      const spotsAfter = SPOTS - round;
+      const cands = DECK.get(G.current) || [];
+      const base = res.coverage;
+      let any = false;
+      const rows = cands.map((p) => {
+        const ok = RF.canAfford(p.salary, left, spotsAfter, floor);
+        any = any || ok;
+        const gain = lineupOf(players.concat([p])).coverage - base;
+        const corners = ORDER.map((c) => `${short(c)} ${fmtPct(p.pct[CIDX[c]])}`).join(" · ");
+        const moved = p.team && !p.team.split("/").includes(G.current) ? ` · ${yy(GAME.stats_season)} with ${esc(p.team)}` : "";
+        return `<li class="cand${ok ? "" : " over"}">${glyph(p, players, round)}
+          <span class="who"><b>${esc(p.name)}</b><span class="meta">${corners}${moved}</span></span>
+          <span class="price"><b>${money(p.salary)}</b> <span class="meta">${Math.round(100 * p.salary / GAME.cap)}%</span>
+            <span class="gain">+${(gain * 100).toFixed(1)} pts</span></span>
+          <button class="btn${ok ? " primary" : ""}" data-sign="${p.pid}" ${ok ? "" : "disabled"}>${ok ? "Sign" : "Over"}</button></li>`;
+      }).join("");
+      const stuck = any ? "" : `<p class="notice">Nobody here fits: you need ${money(spotsAfter * floor)} left for the ${spotsAfter} spot${spotsAfter === 1 ? "" : "s"} after this one.
+        <button class="btn" id="game-redeal" style="margin-left:6px">Deal another team (free)</button></p>`;
+      html += `<div class="card"><div class="deal-head"><div><span class="stat-label">Pick ${round} of ${SPOTS} · you're dealt</span>
+          <h2>${esc(teamName(G.current))}</h2></div>
+          <button class="btn" id="game-reroll" ${G.rerolls ? "" : "disabled"}>Reroll team (${G.rerolls} left)</button></div>
+        ${stuck}<ul class="cands">${rows}</ul></div>`;
+    } else {
+      const best = bestScores();
+      const bestLine = G.mode === "daily"
+        ? (best.daily && best.daily.date === G.date ? `Your best today: ${(best.daily.score * 100).toFixed(1)}%` : "")
+        : (best.free != null ? `Your best in free play: ${(best.free * 100).toFixed(1)}%` : "");
+      html += `<div class="card"><span class="stat-label">${G.mode === "daily" ? `Daily deal · ${esc(G.date)}` : "Free play"} · final</span>
+        <div class="final">${(res.coverage * 100).toFixed(1)}%</div>
+        <p style="margin:2px 0 8px">coverage, with ${money(spent())} of the ${money(GAME.cap, 2)} cap. ${esc(bestLine)}</p>
+        <div class="row"><button class="btn primary" id="game-copy">Copy result</button><button class="btn" id="game-again">Play again</button></div>
+        <textarea class="share-text" id="game-share" readonly hidden></textarea></div>`;
+    }
+    $("game-side").innerHTML = html;
+
+    const slots = new Map(players.map((p, i) => [keyOf(p), i]));
+    const colors = { colored: res.players, others: [], slots };
+    $("game-caption").textContent = `${G.picks.length} of ${SPOTS} signed`;
+    drawSquare($("game-svg"), res, { colors, outline: G.done });
+    const salaryOf = new Map(G.picks.map((p) => [`${p.pid}|${GAME.stats_season}`, p.salary]));
+    const numbers = G.done ? statsHTML(res, "regular", "your five, compared with real teams' rotations")
+      : `<div class="stats"><div class="stat hero"><span class="stat-label">Coverage so far</span>
+          <span class="stat-value">${share(res.coverage)}</span><span class="stat-note">of the square filled by your signings</span></div></div>
+         <p class="muted" style="margin:0;font-size:13.5px">Depth and the team outline show once all five are signed.</p>`;
+    $("game-panel").innerHTML = numbers
+      + (G.picks.length ? tableHTML(res, colors, { second: "Salary", secondValue: (p) => money(salaryOf.get(keyOf(p))) }) : "");
+    const byKey = new Map(res.players.map((p) => [keyOf(p), p]));
+    bindFocus($("game-svg"), $("game-panel"), $("game-hint"), (k) => describePlayer(byKey.get(k)));
+    store.set("rf-game", JSON.stringify(G));
+  }
+
+  function restoreGame() {
+    try {
+      const g = JSON.parse(store.get("rf-game") || "null");
+      const valid = g && Array.isArray(g.picks) && g.picks.every((p) => (DECK.get(p.team) || []).some((q) => q.pid === p.pid))
+        && DECK.has(g.current) && (g.mode === "free" || g.date === todayKey());
+      if (valid) { G = g; return; }
+    } catch (e) { /* ignore */ }
+    newGame("daily");
+  }
+
+  if (GAME) {
+    $("tab-game").hidden = false;
+    $("game-rules").textContent = `Five rounds. Each round deals you one team's ${GAME.contract_season} roster: sign one player from it. `
+      + `Stay under the ${money(GAME.cap, 2)} salary cap; you get ${REROLLS} rerolls a game. Score: how much of the square your five fill. `
+      + `The daily deal is the same for everyone today.`;
+    $("game-foot").innerHTML = `Salaries: ${esc(GAME.contract_season)} contracts from <a href="${esc(GAME.source_url)}" target="_blank" rel="noopener">${esc(GAME.source)}</a>. `
+      + `Shapes: ${esc(GAME.stats_season)} stats for players with ${mins(GAME.min_minutes)}+ minutes, so rookies and anyone who missed the season aren't in the deck. `
+      + `Cap: ${money(GAME.cap, 3)}, the NBA's ${esc(GAME.contract_season)} salary cap.`;
+    $("game-mode-daily").addEventListener("click", () => { if (G.mode !== "daily") { newGame("daily"); renderGame(); } });
+    $("game-mode-free").addEventListener("click", () => { if (G.mode !== "free") { newGame("free"); renderGame(); } });
+    $("game-new").addEventListener("click", () => { newGame(G.mode); renderGame(); });
+    $("game-side").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b || G == null) return;
+      if (b.dataset.sign) {
+        const p = (DECK.get(G.current) || []).find((q) => q.pid === Number(b.dataset.sign));
+        if (!p || !RF.canAfford(p.salary, GAME.cap - spent(), SPOTS - G.picks.length - 1, floor)) return;
+        G.picks.push({ pid: p.pid, salary: p.salary, team: G.current });
+        if (G.picks.length >= SPOTS) {
+          G.done = true;
+          recordBest(lineupOf(gamePlayers()).coverage);
+        } else deal();
+      } else if (b.id === "game-reroll" && G.rerolls > 0) {
+        G.rerolls -= 1;
+        deal();
+      } else if (b.id === "game-redeal") {
+        deal();
+      } else if (b.id === "game-again") {
+        newGame(G.mode);
+      } else if (b.id === "game-copy") {
+        const text = shareText(lineupOf(gamePlayers()));
+        const box = $("game-share");
+        const fallback = () => { box.hidden = false; box.value = text; box.select(); b.textContent = "Copy the text below"; };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => { b.textContent = "Copied"; }, fallback);
+        } else fallback();
+        return;
+      } else return;
+      renderGame();
+    });
+  }
+
   /* ---- tabs, events, start ---------------------------------------------------------------- */
-  const VIEWS = ["teams", "compare", "builder"];
+  const VIEWS = GAME ? ["teams", "compare", "builder", "game"] : ["teams", "compare", "builder"];
   function show(view) {
     if (!VIEWS.includes(view)) view = "teams";
     for (const v of VIEWS) {
@@ -643,7 +898,7 @@ td.dim { color: var(--muted); }
     ["Surplus above cap", "In Sets up others and Fits next to stars, more stops counting once a team is in the top 20%. The extra is shown in players' worth."],
   ];
   $("glossary").innerHTML = gloss.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("");
-  $("sources").innerHTML = `Data: player stats from <a href="https://www.nba.com/stats" target="_blank" rel="noopener">NBA.com</a> via nba_api; offense and defense from <a href="https://www.darko.app" target="_blank" rel="noopener">DARKO</a>. Seasons ${esc(SEASONS[0])} to ${esc(LATEST)}, built ${esc(M.generated)}. A personal project, not affiliated with the NBA.`;
+  $("sources").innerHTML = `Data: player stats from <a href="https://www.nba.com/stats" target="_blank" rel="noopener">NBA.com</a> via nba_api; offense and defense from <a href="https://www.darko.app" target="_blank" rel="noopener">DARKO</a>${GAME ? `; contracts from <a href="${esc(GAME.source_url)}" target="_blank" rel="noopener">${esc(GAME.source)}</a>` : ""}. Seasons ${esc(SEASONS[0])} to ${esc(LATEST)}, built ${esc(M.generated)}. A personal project, not affiliated with the NBA.`;
   $("brand-sub").textContent = `${SEASONS[0]} to ${LATEST}`;
   $("synthetic-notice").hidden = !M.synthetic;
 
@@ -664,11 +919,13 @@ td.dim { color: var(--muted); }
     if (Array.isArray(l)) lineup = l.filter((k) => pick(k)).slice(0, 5);
   } catch (e) { /* ignore */ }
   if (!lineup.length) loadTeamTop5(LATEST, T.team);
-  $("builder-season").value = LATEST;
+  fillSelect($("builder-season"), seasonItems(), LATEST);
+  fillSelect($("builder-team"), teamItems(LATEST), T.team);
 
   renderTeams();
   renderCompare();
   renderBuilder();
+  if (GAME) { restoreGame(); renderGame(); }
   const fromHash = location.hash.replace("#", "");
   show(VIEWS.includes(fromHash) ? fromHash : store.get("rf-view") || "teams");
 })();

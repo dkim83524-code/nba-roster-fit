@@ -7,7 +7,8 @@ import pytest
 from rosterfit import geometry
 from rosterfit.config import CORNERS
 from rosterfit.team import PLAYOFF_MODE, REGULAR_MODE, evaluate_team
-from rosterfit.web import HERE, build_web_data, render_page, write_web
+from rosterfit.synthetic import make_contracts
+from rosterfit.web import HERE, add_game, build_web_data, render_page, write_web
 
 
 @pytest.fixture
@@ -107,3 +108,56 @@ def test_browser_math_matches_python(league, data, tmp_path):
         vals = {c: row[f"{c}_pct"] / 100 for c in CORNERS}
         polys.append(geometry.to_polygon(geometry.shape_points(vals, order)))
     assert lineup["coverage"] == pytest.approx(geometry.union_fraction(polys), abs=2e-3)
+
+
+def test_cap_game_deck_holds_only_players_with_full_shapes(data):
+    contracts = make_contracts(data)
+    info = add_game(data, "2026-27", contracts, 164_961_000, min_minutes=500)
+    game = data["game"]
+    assert game["stats_season"] == "2025-26" and game["cap"] == 164_961_000
+    assert info["deck"] == len(game["deck"]) > 0
+    rows = {r[0]: r for r in data["players"]["2025-26"]}
+    for pid, salary, team in game["deck"]:
+        r = rows[pid]
+        assert r[4] >= 500 and all(v is not None for v in r[6:14])
+        assert salary > 0 and team in data["teams"]["2025-26"]
+    assert [d[1] for d in game["deck"]] == sorted((d[1] for d in game["deck"]), reverse=True)
+    json.dumps(data, allow_nan=False)
+
+
+def test_cap_game_matches_contract_names(data):
+    rows = data["players"]["2025-26"]
+    names = {}
+    for r in rows:  # synthetic names repeat; keep the unique ones
+        names[r[1]] = None if r[1] in names else r
+    unique = [r for r in names.values() if r and r[4] >= 500 and None not in r[6:14]][:3]
+    import pandas as pd
+    contracts = pd.DataFrame({"bbref_id": ["a", "b", "c", "d"], "name": [r[1] for r in unique] + ["Rookie Nobody"],
+                              "team": ["DEM"] * 4, "salary": [3, 2, 1, 9], "guaranteed": [0.0] * 4})
+    info = add_game(data, "2026-27", contracts, 100)
+    assert info["unmatched"] == ["Rookie Nobody"]
+    assert sorted(d[0] for d in data["game"]["deck"]) == sorted(r[0] for r in unique)
+
+
+_DEAL_SCRIPT = """
+const RF = require(process.argv[2]);
+const teams = ["SAS", "NYK", "BOS", "DEN", "OKC", "LAL"];
+const a = RF.dealOrder(teams, RF.hashSeed("2026-27|2026-10-01"));
+const b = RF.dealOrder(teams.slice().reverse(), RF.hashSeed("2026-27|2026-10-01"));
+const c = RF.dealOrder(teams, RF.hashSeed("2026-27|2026-10-02"));
+const floor = RF.signingFloor([[9, 2, 5], [3, 4], [], [7]]);
+console.log(JSON.stringify({ a, b, c, floor, afford: [RF.canAfford(10, 14, 2, 2), RF.canAfford(10, 13.9, 2, 2)] }));
+"""
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js not installed")
+def test_daily_deal_is_the_same_for_everyone(tmp_path):
+    script = tmp_path / "deal.js"
+    script.write_text(_DEAL_SCRIPT)
+    run = subprocess.run(["node", str(script), str(HERE / "core.js")], capture_output=True, text=True, check=True)
+    out = json.loads(run.stdout)
+    assert sorted(out["a"]) == sorted(["SAS", "NYK", "BOS", "DEN", "OKC", "LAL"])
+    assert out["a"] == out["b"]  # input order doesn't matter, only the seed
+    assert out["a"] != out["c"]
+    assert out["afford"] == [True, False]
+    assert out["floor"] == 7  # the priciest of each team's cheapest: every team has someone at or under it
