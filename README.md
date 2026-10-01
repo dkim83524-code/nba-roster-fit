@@ -10,7 +10,7 @@ and a well-built roster fills the square without piling everyone into the same c
 
 | Corner (clockwise from top-left) | Label | Measure |
 |---|---|---|
-| Offense | Scores | O-LEBRON 80% + DARKO O-DPM 20% |
+| Offense | Offense | O-LEBRON 80% + DARKO O-DPM 20% |
 | Playmaking | Sets up others | 50/50 blend of potential assists and assist points created, per 100 possessions (NBA.com passing tracking) |
 | Portability | Fits next to stars | Equal blend of catch-and-shoot 3-point proficiency, OREB%, screen assists per 100, and defensive versatility |
 | Defense | Stops | D-LEBRON 80% + DARKO D-DPM 20% |
