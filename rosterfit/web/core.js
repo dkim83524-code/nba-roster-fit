@@ -276,9 +276,58 @@
     return out;
   }
 
+  /* ---- cap game ---- */
+
+  /* Seeded random numbers (mulberry32), so a daily deal comes out the same for everyone. */
+  function seededRandom(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* FNV-1a hash of a string, for seeds like "2026-27|2026-10-01". */
+  function hashSeed(text) {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  /* The order teams are dealt in: a seeded shuffle of the sorted team list. */
+  function dealOrder(teams, seed) {
+    const rand = seededRandom(seed);
+    const out = teams.slice().sort();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  }
+
+  /* What to keep in hand per open spot: the most expensive of the teams' cheapest players. Every
+   * team has someone at or under it, so whichever team is dealt next, a signing is always possible. */
+  function signingFloor(salariesByTeam) {
+    let floor = 0;
+    for (const list of salariesByTeam) if (list.length) floor = Math.max(floor, Math.min(...list));
+    return floor;
+  }
+
+  /* A signing must leave the floor for every spot still open after it. */
+  function canAfford(salary, left, spotsAfter, floor) {
+    return salary + spotsAfter * floor <= left + 1e-6;
+  }
+
   const api = {
     CORNER_XY, shapePoints, shapeArea, unionArea, pctAgainst, evaluate, playerIndex, entriesFor,
     teamContext, evaluateTeam, evaluateLineup, assignColors, placeLabels,
+    seededRandom, hashSeed, dealOrder, signingFloor, canAfford,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.RosterFitCore = api;

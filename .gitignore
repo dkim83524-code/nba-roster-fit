@@ -3,6 +3,9 @@ data/cache/
 data/manual/**/*.csv
 data/manual/**/*.json
 data/manual/**/*.js
+data/manual/**/*.xls
+data/manual/**/*.xlsx
+data/manual/**/*.htm*
 data/processed/
 outputs/
 config.local.yaml

@@ -138,3 +138,20 @@ def make_league(root: Path, seasons: list[str], n_teams: int = 30, games: int = 
                       "O-DPM": o.round(2), "D-DPM": d.round(2), "DPM": (o + d).round(2)}) \
             .to_csv(impact_dir / f"darko_{season}.csv", index=False)
     return root / "cache", impact_dir
+
+
+def make_contracts(data: dict, seed: int = 7) -> pd.DataFrame:
+    """Made-up contracts for the website's cap game, in read_contracts' format: better shapes
+    cost more, with noise so there are bargains."""
+    rng = np.random.default_rng(seed)
+    season = data["meta"]["seasons"][-1]
+    rows = []
+    for r in data["players"][season]:
+        pct = [v for v in r[6:10] if v is not None]
+        if len(pct) < 4 or not r[2]:
+            continue
+        quality = (sum(pct) / 400) ** 2.2
+        salary = 1.3e6 + 48e6 * quality * rng.uniform(0.55, 1.35)
+        rows.append({"PLAYER_ID": r[0], "bbref_id": f"demo{r[0]}", "name": r[1], "team": r[2].split("/")[0],
+                     "salary": int(min(salary, 0.35 * 164_961_000)), "guaranteed": float("nan")})
+    return pd.DataFrame(rows).sort_values("salary", ascending=False).reset_index(drop=True)
