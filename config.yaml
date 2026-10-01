@@ -43,7 +43,8 @@ impact:                              # offense and defense corners: halves of on
   defense_multi_year:
     enabled: false
     weights: [0.6, 0.3, 0.1]
-  name_overrides: {}                 # "Name As Spelled In CSV": nba_player_id, for names that don't match
+  # For names `rosterfit check` reports as unmatched: "Name In The CSV": "Name On NBA.com" (or player id)
+  name_overrides: {}
 
 playmaking:                          # creating for teammates; self-scoring belongs in offense
   weights:                           # each component is z-scored within the qualified pool first

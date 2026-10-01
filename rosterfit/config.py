@@ -49,7 +49,7 @@ class ImpactCfg:
     numeric_season_is_end_year: bool = True
     defense_higher_is_better: bool = True
     defense_multi_year: MultiYearCfg = field(default_factory=MultiYearCfg)
-    name_overrides: dict[str, int] = field(default_factory=dict)
+    name_overrides: dict[str, int | str] = field(default_factory=dict)
 
 
 @dataclass

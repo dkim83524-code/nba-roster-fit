@@ -23,6 +23,7 @@ from .cache import Cache
 from .config import Config, load_config
 from .seasons import PLAYOFFS, REGULAR, parse_season_arg
 from .sources.manual_nba import browser_script, download_jobs, import_manual
+from .sources.names import normalize_name
 from .sources.nba_stats import TABLES, NBAStatsFetcher, available
 from .team import PLAYOFF_MODE, REGULAR_MODE, TeamResult, build_league, evaluate_team, summary_table
 
@@ -115,11 +116,37 @@ def cmd_check(cfg: Config, args) -> int:
     print(f"\n{cfg.impact.source_name} files in {cfg.path(cfg.impact.dir)}: {len(rep.files)}")
     for name in rep.files:
         print(f"  {name}: columns used {rep.columns[name]}")
-    for season, names in sorted(rep.unmatched.items()):
-        shown = ", ".join(names[:12]) + (" ..." if len(names) > 12 else "")
-        print(f"  {season}: {len(names)} names not matched to NBA.com players: {shown}")
-    if rep.unmatched:
-        print("  (add them under impact.name_overrides in config.yaml if any matter)")
+    if rep.loose:
+        print("\nMatched by last name or word order (worth a glance):")
+        for season, pairs in sorted(rep.loose.items()):
+            print(f"  {season}: " + ", ".join(f"{a} -> {b}" for a, b in pairs))
+    missing_players = False
+    for season in seasons:
+        p = league.players.get(season)
+        if p is None or season not in impact_seasons:
+            continue
+        gap = p[p["offense_raw"].isna() & (p["MIN"] >= args.min_minutes)].sort_values("MIN", ascending=False)
+        if len(gap):
+            if not missing_players:
+                print(f"\nPlayed {args.min_minutes:g}+ minutes but have no {cfg.impact.source_name} value:")
+                missing_players = True
+            candidates = rep.unmatched.get(season, [])
+            for name, mins in list(zip(gap["PLAYER_NAME"], gap["MIN"]))[:10]:
+                last = normalize_name(name).split()[-1:]
+                maybe = [c for c in candidates if normalize_name(c).split()[-1:] == last]
+                hint = f"   {cfg.impact.source_name} has: {', '.join(maybe)}" if maybe else ""
+                print(f"  {season}  {name} ({mins:,.0f} min){hint}")
+            if len(gap) > 10:
+                print(f"  {season}  ... and {len(gap) - 10} more")
+    if missing_players:
+        print(f"  Fix under impact.name_overrides in config.yaml, e.g.\n"
+              f"    name_overrides:\n      \"Name In The {cfg.impact.source_name} CSV\": \"Name On NBA.com\"")
+    elif impact_seasons:
+        print(f"\nEvery player with {args.min_minutes:g}+ minutes has a {cfg.impact.source_name} value.")
+    unmatched = sum(len(v) for v in rep.unmatched.values())
+    if unmatched:
+        print(f"({unmatched} {cfg.impact.source_name} rows across all seasons are players with no NBA.com minutes "
+              "that season, e.g. injured all year; they're ignored.)")
     print(f"\nTeam pool: {len(league.pool_seasons)} complete season(s) in the window: "
           f"{', '.join(league.pool_seasons) or 'none'}")
     for season, missing in sorted(league.incomplete.items()):
@@ -259,6 +286,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("check", help="report cached tables, impact CSVs and the team pool")
     p.add_argument("--seasons")
+    p.add_argument("--min-minutes", type=float, default=100,
+                   help="list players with at least this many minutes who lack an impact value")
     p.set_defaults(func=cmd_check)
 
     for name, func, helptext in (("plot", cmd_plot, "draw one team"),
