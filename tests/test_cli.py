@@ -67,12 +67,12 @@ def test_explain_lists_ingredients(league):
     players = league.players["2025-26"]
     minutes = league.minutes["regular"]["2025-26"]
     table = ingredients(players, minutes, "DEM", "portability", league.cfg, top=5)
-    assert list(table.columns) == ["PLAYER_NAME", "MIN", "C&S 3s", "OREB%", "Screen AST", "Versatility",
-                                   "corner"]
+    assert list(table.columns) == ["PLAYER_NAME", "MIN", "3PT volume", "3PT accuracy", "OREB%", "Screen AST",
+                                   "Versatility", "corner"]
     assert len(table) == 5 and table["MIN"].is_monotonic_decreasing
-    assert table[["C&S 3s", "OREB%"]].stack().between(0, 100).all()
-    text = format_table(table, "title", league.cfg.portability.weights, "rank")
-    assert "weights: C&S 3s 0.25" in text and "scaling: rank" in text
+    assert table[["3PT volume", "OREB%"]].stack().between(0, 100).all()
+    text = format_table(table, "title", league.cfg.portability.component_weights(), "rank")
+    assert "weights: 3PT volume 0.28, 3PT accuracy 0.12, OREB% 0.2" in text and "scaling: rank" in text
 
 
 def test_compare_two_teams(league, tmp_path):

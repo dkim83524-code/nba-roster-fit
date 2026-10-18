@@ -94,13 +94,41 @@ class PlaymakingCfg:
     component_scaling: str = "z"
 
 
+PORTABILITY_COMPONENTS = ("cs3_proficiency", "three_volume", "three_accuracy", "oreb_pct",
+                          "screen_ast_per100", "versatility")
+
+
+@dataclass
+class PartCfg:
+    """One part of a corner built from parts: its weight, and its components' weights inside it."""
+    weight: float = 0.0
+    components: dict[str, float] = field(default_factory=dict)
+
+
 @dataclass
 class PortabilityCfg:
+    # combine "parts": each part is standardized, a below-average part counts 0, and the parts are
+    # added with their weights. combine "mean": the weighted average of `weights` (the older way).
+    combine: str = "mean"
+    parts: dict[str, PartCfg] = field(default_factory=dict)
     weights: dict[str, float] = field(default_factory=dict)
     min_weight_present: float = 0.5
     component_scaling: str = "z"
     cs3_pct_prior_attempts: float = 50
+    catch_shoot_weight: float = 1.5      # a catch-and-shoot 3 counts this many times another 3
     versatility_min_partial_poss: float = 300
+
+    def component_weights(self) -> dict[str, float]:
+        """Each component's share of the corner (parts flattened), for explain and table checks."""
+        if self.combine != "parts":
+            return dict(self.weights)
+        out: dict[str, float] = {}
+        for part in self.parts.values():
+            total = sum(w for w in part.components.values() if w > 0)
+            for name, w in part.components.items():
+                if w > 0 and total > 0:
+                    out[name] = out.get(name, 0.0) + part.weight * w / total
+        return out
 
 
 @dataclass
@@ -228,6 +256,21 @@ def validate(cfg: Config) -> None:
             raise ValueError(f"impact.weights.{corner}: weights must be >= 0 with at least one > 0")
     if not 0 < cfg.impact.min_weight_present <= 1:
         raise ValueError("impact.min_weight_present must be in (0, 1]")
+    port = cfg.portability
+    if port.combine not in ("mean", "parts"):
+        raise ValueError("portability.combine must be 'mean' or 'parts'")
+    if port.combine == "parts":
+        if not port.parts or sum(p.weight for p in port.parts.values()) <= 0:
+            raise ValueError("portability.parts needs at least one part with weight > 0")
+        for name, part in port.parts.items():
+            unknown = set(part.components) - set(PORTABILITY_COMPONENTS)
+            if unknown:
+                raise ValueError(f"portability.parts.{name}: unknown component(s) {sorted(unknown)}; "
+                                 f"known: {list(PORTABILITY_COMPONENTS)}")
+            if part.weight < 0 or any(w < 0 for w in part.components.values()):
+                raise ValueError(f"portability.parts.{name}: weights must be >= 0")
+    if port.catch_shoot_weight < 1:
+        raise ValueError("portability.catch_shoot_weight must be >= 1")
     for section in (cfg.playmaking, cfg.portability):
         if section.component_scaling not in ("z", "rank"):
             raise ValueError("component_scaling must be 'z' or 'rank'")

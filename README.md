@@ -12,8 +12,15 @@ and a well-built roster fills the square without piling everyone into the same c
 |---|---|---|
 | Offense | Offense | O-LEBRON 80% + DARKO O-DPM 20% |
 | Playmaking | Sets up others | 50/50 blend of potential assists and assist points created, per 100 possessions (NBA.com passing tracking) |
-| Portability | Fits next to stars | Equal blend of catch-and-shoot 3-point proficiency, OREB%, screen assists per 100, and defensive versatility |
+| Portability | Fits next to stars | Three parts added up: 3-point spacing 40% (all 3s, catch-and-shoot 3s counting 1.5x; volume 70%, accuracy 30%), screening 40% (OREB% and screen assists per 100), defensive versatility 20% |
 | Defense | Stops | D-LEBRON 80% + DARKO D-DPM 20% |
+
+In "Fits next to stars" each part is standardized among the season's qualified players and a
+below-average part counts 0, then the parts are added. A pure shooter isn't dragged down by his
+rebounding, a pure rim-runner isn't dragged down by his shooting, and a shooting big earns both.
+Spacing counts 3-point volume directly, so a high-volume shooter like Curry gets credit for his
+gravity (the older C&S-only formula stopped counting volume past ~4 attempts per 100).
+`portability.combine: "mean"` brings back the older averaged formula.
 
 Offense and defense blend two plus-minus metrics. The 2 : 0.5 weights follow
 [Crafted NBA](https://craftednba.com)'s defensive blend, restricted to the sources we can download,

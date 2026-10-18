@@ -18,6 +18,8 @@ LABELS = {
     "turnovers_per100": "Few turnovers",
     "box_creation": "Box Creation",
     "cs3_proficiency": "C&S 3s",
+    "three_volume": "3PT volume",
+    "three_accuracy": "3PT accuracy",
     "oreb_pct": "OREB%",
     "screen_ast_per100": "Screen AST",
     "versatility": "Versatility",
@@ -29,6 +31,8 @@ _SECTIONS = {"playmaking": ("pm_", PM_NEGATIVE), "portability": ("port_", ()),
 def corner_weights(cfg: Config, corner: str) -> dict[str, float]:
     if corner in IMPACT_CORNERS:
         return cfg.impact.weights_for(corner)
+    if corner == "portability":
+        return cfg.portability.component_weights()
     return getattr(cfg, corner).weights
 
 
