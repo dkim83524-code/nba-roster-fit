@@ -13,7 +13,7 @@ from ._util import pick
 from .offense_defense import offense_defense
 from .playmaking import NEGATIVE as PM_NEGATIVE
 from .playmaking import playmaking_components
-from .pool import composite, percentile_against, qualified_mask, zscore
+from .pool import composite, parts_sum, percentile_against, qualified_mask, zscore
 from .portability import portability_components
 
 # Which cached table each weighted component depends on.
@@ -21,6 +21,8 @@ _COMPONENT_TABLE = {
     "potential_ast_per100": "passing",
     "ast_pts_created_per100": "passing",
     "cs3_proficiency": "catch_shoot",
+    "three_volume": "catch_shoot",
+    "three_accuracy": "catch_shoot",
     "screen_ast_per100": "hustle",
     "versatility": "matchups",
 }
@@ -28,7 +30,7 @@ _COMPONENT_TABLE = {
 
 def required_tables(cfg: Config) -> list[str]:
     needed = {"gamelog", "advanced"}
-    for weights in (cfg.playmaking.weights, cfg.portability.weights):
+    for weights in (cfg.playmaking.weights, cfg.portability.component_weights()):
         needed |= {_COMPONENT_TABLE[k] for k, w in weights.items() if w > 0 and k in _COMPONENT_TABLE}
     return sorted(needed)
 
@@ -132,15 +134,21 @@ def build_player_table(data: SeasonData, impact: dict[str, pd.DataFrame] | pd.Da
     pm = playmaking_components(players, data.passing)
     port = portability_components(
         players, data.advanced, data.catch_shoot, data.hustle, data.matchups,
-        cfg.portability.cs3_pct_prior_attempts, cfg.portability.versatility_min_partial_poss)
+        cfg.portability.cs3_pct_prior_attempts, cfg.portability.versatility_min_partial_poss,
+        cfg.portability.catch_shoot_weight)
+    port_cfg = cfg.portability
+    if port_cfg.combine == "parts":
+        portability = parts_sum(port, port_cfg.parts, pool, port_cfg.min_weight_present, port_cfg.component_scaling)
+    else:
+        portability = composite(port, port_cfg.weights, pool, (), port_cfg.min_weight_present,
+                                port_cfg.component_scaling)
 
     raw = {
         "offense": od["offense"],
         "defense": od["defense"],
         "playmaking": composite(pm, cfg.playmaking.weights, pool, PM_NEGATIVE,
                                 cfg.playmaking.min_weight_present, cfg.playmaking.component_scaling),
-        "portability": composite(port, cfg.portability.weights, pool, (),
-                                 cfg.portability.min_weight_present, cfg.portability.component_scaling),
+        "portability": portability,
     }
     for corner in CORNERS:
         values = raw[corner].astype(float)

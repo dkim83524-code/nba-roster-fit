@@ -56,6 +56,28 @@ def rank_normal(values: pd.Series, pool: pd.Series) -> pd.Series:
     return pd.Series(out, index=values.index)
 
 
+def parts_sum(components: pd.DataFrame, parts: dict, pool: pd.Series, min_weight_present: float = 0.5,
+              scaling: str = "z") -> pd.Series:
+    """A corner built from parts: each part is the weighted mean of its standardized components,
+    standardized again so parts share one scale; a below-average part counts 0 (it neither helps
+    nor hurts); the parts are added with their weights.
+
+    parts: name -> object with `weight` and `components` ({component: weight}). NaN for a player
+    with none of the parts.
+    """
+    scorer = {"z": zscore, "rank": rank_normal}[scaling]
+    total = pd.Series(0.0, index=components.index)
+    have = pd.Series(False, index=components.index)
+    for part in parts.values():
+        if part.weight <= 0:
+            continue
+        score = composite(components, part.components, pool, (), min_weight_present, scaling)
+        z = scorer(score, pool)
+        total = total + part.weight * z.clip(lower=0).fillna(0.0)
+        have = have | z.notna()
+    return total.where(have)
+
+
 def composite(components: pd.DataFrame, weights: dict[str, float], pool: pd.Series,
               negative: tuple[str, ...] = (), min_weight_present: float = 0.5,
               scaling: str = "z") -> pd.Series:
