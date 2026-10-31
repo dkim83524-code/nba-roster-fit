@@ -65,3 +65,16 @@ def test_new_tables_are_recognized():
     url = request_url("rim_defense", "2025-26", REGULAR)
     assert "/stats/leaguedashptdefend?" in url and "DefenseCategory=Less+Than+6Ft" in url
     assert "LastNGames=0" in url and "PerMode=Totals" in url
+
+
+def test_rim_table_reads_the_distance_category_names():
+    from rosterfit.metrics.skills import rim_table
+    overall = pd.DataFrame({"CLOSE_DEF_PERSON_ID": [1], "D_FGM": [50], "D_FGA": [100], "NORMAL_FG_PCT": [0.6]})
+    lt6 = pd.DataFrame({"CLOSE_DEF_PERSON_ID": [1], "FGM_LT_06": [50], "FGA_LT_06": [100], "NS_LT_06_PCT": [0.6]})
+    no_normal = pd.DataFrame({"CLOSE_DEF_PERSON_ID": [1], "FGM_LT_06": [50], "FGA_LT_06": [100],
+                              "LT_06_PCT": [0.5], "PLUSMINUS": [-0.1]})
+    for df in (overall, lt6, no_normal):
+        t = rim_table(df)
+        assert list(t.iloc[0]) == pytest.approx([1, 50, 100, 0.6])
+    assert rim_table(pd.DataFrame({"CLOSE_DEF_PERSON_ID": [1], "WHO_KNOWS": [3]})) is None
+    assert rim_table(None) is None

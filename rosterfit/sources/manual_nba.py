@@ -34,7 +34,7 @@ _COUNT_COLUMNS = {
     "catch_shoot": ["CATCH_SHOOT_FG3A", "CATCH_SHOOT_FG3M"],
     "hustle": ["SCREEN_ASSISTS", "DEFLECTIONS", "CONTESTED_SHOTS_3PT", "LOOSE_BALLS_RECOVERED"],
     "drives": ["DRIVES"],
-    "rim_defense": ["D_FGM", "D_FGA"],
+    "rim_defense": ["D_FGM", "D_FGA", "FGM_LT_06", "FGA_LT_06"],
     "matchups": ["PARTIAL_POSS"],
 }
 
