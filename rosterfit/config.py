@@ -137,6 +137,7 @@ SKILL_COMPONENTS = (
     "three_volume", "three_accuracy",                                   # spacing
     "oreb_pct", "screen_ast_per100",                                    # screening
     "stl_per100", "deflections_per100", "contested3_per100",           # perimeter defense
+    "matchup_difficulty",
     "rim_points_saved_per100", "rim_contests_per100", "blk_per100",    # rim protection
 )
 
@@ -151,6 +152,8 @@ class SkillsCfg:
     axes: dict[str, dict[str, float]] = field(default_factory=dict)  # skill -> component weights
     min_weight_present: float = 0.5
     size_floor: float = 0.35          # shape size at the 0th impact percentile; 1.0 at the 100th
+    matchup_quality: str = "creation"  # who-he-guarded rates opponents by: creation or offense
+    matchup_prior_poss: float = 200.0  # small samples are pulled toward average by this many possessions
 
     @property
     def order(self) -> list[str]:
@@ -310,6 +313,12 @@ def validate(cfg: Config) -> None:
                                  f"known: {list(SKILL_COMPONENTS)}")
         if not 0 <= sk.size_floor <= 1:
             raise ValueError("skills.size_floor must be between 0 and 1")
+        if sk.matchup_quality not in ("creation", "offense"):
+            raise ValueError("skills.matchup_quality must be 'creation' or 'offense'")
+        if sk.matchup_quality == "creation" and "creation" not in sk.axes:
+            raise ValueError("skills.matchup_quality 'creation' needs a creation skill under skills.axes")
+        if sk.matchup_prior_poss < 0:
+            raise ValueError("skills.matchup_prior_poss must be >= 0")
     if port.catch_shoot_weight < 1:
         raise ValueError("portability.catch_shoot_weight must be >= 1")
     for section in (cfg.playmaking, cfg.portability):

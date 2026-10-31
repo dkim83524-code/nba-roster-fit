@@ -145,6 +145,20 @@ def make_league(root: Path, seasons: list[str], n_teams: int = 30, games: int = 
                                   "D_FGA": rim_att, "D_FGM": (rim_att * allowed).round(),
                                   "NORMAL_FG_PCT": normal.round(3)})[rim_att > 0],
                     season, REGULAR, "rim_defense")
+        # who guarded whom: better perimeter defenders spend more time on the self-creators
+        mrows, ids, team_of = [], players["PLAYER_ID"].to_numpy(), players["TEAM_ABBREVIATION"].to_numpy()
+        for i in range(len(players)):
+            if players["MIN"].iat[i] <= 0:
+                continue
+            others = np.flatnonzero(team_of != team_of[i])
+            opp = srng.choice(others, size=min(25, len(others)), replace=False)
+            w = np.exp(0.7 * st[i, 1] * st[opp, 0]) * srng.uniform(0.5, 1.5, len(opp))
+            poss = players["MIN"].iat[i] * 0.45 * w / w.sum()
+            mrows += [(ids[o], players["PLAYER_NAME"].iat[o], ids[i], players["PLAYER_NAME"].iat[i], round(p, 1))
+                      for o, p in zip(opp, poss)]
+        cache.write(pd.DataFrame(mrows, columns=["OFF_PLAYER_ID", "OFF_PLAYER_NAME", "DEF_PLAYER_ID",
+                                                 "DEF_PLAYER_NAME", "PARTIAL_POSS"]),
+                    season, REGULAR, "season_matchups")
         mrows = []
         for p, v in zip(players.itertuples(), tr[:, 6]):
             spread = 1 / (1 + np.exp(-v))  # 0 = specialist, 1 = even

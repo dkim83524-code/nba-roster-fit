@@ -63,6 +63,7 @@ class SeasonData:
     scoring: pd.DataFrame | None = None
     drives: pd.DataFrame | None = None
     rim_defense: pd.DataFrame | None = None
+    season_matchups: pd.DataFrame | None = None
 
     @property
     def regular_season_end(self) -> pd.Timestamp | None:
@@ -87,6 +88,7 @@ def load_season(cache: Cache, season: str) -> SeasonData | None:
         scoring=cache.read_or_none(season, REGULAR, "scoring"),
         drives=cache.read_or_none(season, REGULAR, "drives"),
         rim_defense=cache.read_or_none(season, REGULAR, "rim_defense"),
+        season_matchups=cache.read_or_none(season, REGULAR, "season_matchups"),
     )
 
 

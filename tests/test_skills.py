@@ -11,8 +11,8 @@ from rosterfit.sources.manual_nba import identify, request_url
 def test_three_d_tables_are_optional_downloads(cfg):
     core = required_tables(cfg)
     assert not {"scoring", "drives", "rim_defense"} & set(core)  # a missing one never drops a season
-    assert skill_tables(cfg) == ["drives", "rim_defense", "scoring"]
-    assert set(download_tables(cfg)) == set(core) | {"drives", "rim_defense", "scoring"}
+    assert skill_tables(cfg) == ["drives", "rim_defense", "scoring", "season_matchups"]
+    assert set(download_tables(cfg)) == set(core) | {"drives", "rim_defense", "scoring", "season_matchups"}
     cfg.skills.enabled = False
     assert skill_tables(cfg) == []
 
@@ -78,3 +78,36 @@ def test_rim_table_reads_the_distance_category_names():
         assert list(t.iloc[0]) == pytest.approx([1, 50, 100, 0.6])
     assert rim_table(pd.DataFrame({"CLOSE_DEF_PERSON_ID": [1], "WHO_KNOWS": [3]})) is None
     assert rim_table(None) is None
+
+
+def test_matchup_difficulty_weights_by_possessions_and_shrinks():
+    from rosterfit.metrics.skills import matchup_difficulty
+    players = pd.DataFrame({"PLAYER_ID": [1, 2, 10, 11, 12]})
+    quality = pd.Series([50.0, 50.0, 100.0, 0.0, np.nan])  # 12 has no rating: his possessions are skipped
+    m = pd.DataFrame({"DEF_PLAYER_ID": [1, 1, 1, 2], "OFF_PLAYER_ID": [10, 11, 12, 11],
+                      "PARTIAL_POSS": [300.0, 100.0, 500.0, 50.0]})
+    d = matchup_difficulty(players, m, quality, prior_poss=0)
+    assert d[0] == pytest.approx(75.0) and d[1] == pytest.approx(0.0) and np.isnan(d[2])
+    league = (300 * 100 + 0) / (300 + 100 + 50)
+    d = matchup_difficulty(players, m, quality, prior_poss=200)
+    assert d[1] == pytest.approx((0 + 200 * league) / (50 + 200))  # small sample pulled toward average
+
+
+def test_who_he_guarded_feeds_perimeter_defense(league, cfg):
+    q = league.players["2025-26"]
+    q = q[q["qualified"]]
+    assert q["sk_matchup_difficulty"].notna().all()
+    # in the made-up league, good perimeter defenders are put on the self-creators
+    assert q["sk_matchup_difficulty"].corr(q["skill_perimeter_defense_raw"]) > 0.3
+
+
+def test_season_matchups_download_per_team():
+    from rosterfit.sources.manual_nba import download_jobs
+    jobs = download_jobs(["season_matchups"], ["2025-26"])
+    assert len(jobs) == 30 and {j["season_type"] for j in jobs} == {REGULAR}
+    assert all("DefTeamID=" in j["url"] and "leagueseasonmatchups" in j["url"] for j in jobs)
+    assert "PARTIAL_POSS" in jobs[0]["keep"] and "OFF_PLAYER_ID" in jobs[0]["keep"]
+    resp = {"resource": "leagueseasonmatchups", "parameters": {"Season": "2025-26", "SeasonType": "Regular Season"},
+            "resultSets": [{"headers": ["X"], "rowSet": []}]}
+    assert identify(resp)[0] == "season_matchups"
+    assert identify({"resultSets": resp["resultSets"]}, "season_matchups_2025-26.json")[0] == "season_matchups"

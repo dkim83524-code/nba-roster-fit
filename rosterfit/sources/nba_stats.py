@@ -40,8 +40,14 @@ TABLES: dict[str, Table] = {
         Table("scoring", "1996-97", (REGULAR, PLAYOFFS), "scoring breakdown: share of made shots unassisted"),
         Table("drives", "2013-14", (REGULAR, PLAYOFFS), "drives tracking: drives to the basket"),
         Table("rim_defense", "2013-14", (REGULAR, PLAYOFFS), "defense within 6 ft: shots defended, FG% vs normal"),
+        Table("season_matchups", "2017-18", (REGULAR,), "who guarded whom: possessions per defender-scorer pair"),
     )
 }
+# Asked for one defending team at a time: league-wide, these are tens of thousands of rows.
+PER_TEAM_TABLES = {"season_matchups"}
+# Columns kept from per-team tables (the rest is dropped to keep downloads small).
+KEEP_COLUMNS = {"season_matchups": ["OFF_PLAYER_ID", "OFF_PLAYER_NAME", "DEF_PLAYER_ID", "DEF_PLAYER_NAME",
+                                    "GP", "MATCHUP_MIN", "PARTIAL_POSS", "PLAYER_PTS"]}
 
 
 def available(table: str, season: str) -> bool:
@@ -86,6 +92,11 @@ def request_spec(table: str, season: str, season_type: str,
     if table == "hustle":
         return ep.LeagueHustleStatsPlayer, dict(season=season, season_type_all_star=season_type,
                                                 per_mode_time="Totals")
+    if table == "season_matchups":
+        # what NBA.com's matchups page sends: the defending team only, no player filters
+        return ep.LeagueSeasonMatchups, dict(season=season, season_type_playoffs=season_type,
+                                             per_mode_simple="Totals", def_team_id_nullable=str(def_team_id),
+                                             def_player_id_nullable=None, off_player_id_nullable=None)
     if table == "matchups":
         kwargs = dict(season=season, season_type_playoffs=season_type, per_mode_simple="Totals")
         if def_team_id is not None:
@@ -127,6 +138,15 @@ class NBAStatsFetcher:
 
     # -- tables --------------------------------------------------------------------------
     def _table(self, table: str, season: str, season_type: str) -> pd.DataFrame:
+        if table in PER_TEAM_TABLES:
+            parts = []
+            for team_id in team_ids():
+                cls, kwargs = request_spec(table, season, season_type, def_team_id=team_id)
+                part = self._call(cls, **kwargs)
+                if len(part):
+                    keep = [c for c in KEEP_COLUMNS.get(table, part.columns) if c in part.columns]
+                    parts.append(part[keep])
+            return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
         cls, kwargs = request_spec(table, season, season_type)
         if table != "matchups":
             return self._call(cls, **kwargs)
