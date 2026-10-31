@@ -111,9 +111,10 @@ servers, so this step won't work from a hosted environment.
 python -m rosterfit fetch           # 2017-18 to 2025-26: game logs, advanced, passing, C&S, hustle, matchups
 ```
 
-It also fetches three tables only the 3D page uses: scoring (unassisted makes), drives and rim
-defense (shots defended within 6 feet). They're optional: without them the 3D page has gaps and
-nothing else changes.
+It also fetches four tables only the 3D page uses: scoring (unassisted makes), drives, rim
+defense (shots defended within 6 feet) and season matchups (who guarded whom, asked for one
+defending team at a time: 30 requests a season). They're optional: without them the 3D page has
+gaps and nothing else changes.
 
 This is about 60 requests at one per second (more if the matchup endpoint needs per-team calls).
 Everything is cached in `data/cache/` and never re-downloaded unless you pass `--refresh`.
@@ -227,7 +228,12 @@ skills on three axes, which you can turn by dragging.
 |---|---|---|
 | 1 | Creates his shot: unassisted makes, drives, free-throw attempts | Sets up others: potential assists, assist points created |
 | 2 | Spaces the floor: 3-point volume and accuracy | Screens & crashes: offensive rebound %, screen assists |
-| 3 | Perimeter D: steals, deflections, contested 3s | Protects the rim: points saved within 6 ft, rim contests, blocks |
+| 3 | Perimeter D: who he guarded, deflections, contested 3s, steals | Protects the rim: points saved within 6 ft, rim contests, blocks |
+
+"Who he guarded" is the possession-weighted average of the players he defended, rated by how well
+they create their own shot (`skills.matchup_quality: offense` rates them by LEBRON + DARKO offense
+instead). Coaches put their best perimeter defenders on the best creators, so it rewards the
+assignment as well as the activity numbers, which on their own reward gambling for steals.
 
 The two ends of an axis can stand in for each other and the three axes multiply, so a shape's
 volume share is (a + b)(c + d)(e + f) / 8. Shape size comes from the LEBRON + DARKO impact

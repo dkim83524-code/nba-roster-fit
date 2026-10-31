@@ -12,6 +12,11 @@ component empty):
   perimeter_defense  stl_per100              steals (game log)
                      deflections_per100      deflections (hustle)
                      contested3_per100       contested 3-point shots (hustle)
+                     matchup_difficulty      who he guarded: the possession-weighted average of the
+                                             players he defended, rated by their creation percentile
+                                             (or offense; skills.matchup_quality), pulled toward the
+                                             league average by skills.matchup_prior_poss possessions
+                                             (season matchups, one request per defending team)
   rim_protection     rim_points_saved_per100 2 x (expected makes - makes) on shots he defended
                                              within 6 ft, expected from the shooters' normal FG%,
                                              shrunk toward 0 for small samples
@@ -44,6 +49,7 @@ SKILL_TABLES = {
     "contested3_per100": "hustle",
     "rim_points_saved_per100": "rim_defense",
     "rim_contests_per100": "rim_defense",
+    "matchup_difficulty": "season_matchups",
 }
 # Rim points saved is (normal FG% - FG% allowed) x attempts; with few attempts that gap is mostly
 # luck, so it's multiplied by attempts / (attempts + this).
@@ -131,6 +137,7 @@ def skill_components(players: pd.DataFrame, data, playmaking: pd.DataFrame,
     out["stl_per100"] = _box_rate(players, "STL")
     out["deflections_per100"] = _tracked_rate(players, data.hustle, "DEFLECTIONS")
     out["contested3_per100"] = _tracked_rate(players, data.hustle, "CONTESTED_SHOTS_3PT")
+    out["matchup_difficulty"] = nan  # needs the other players' skills first: see skill_scores
     rim = rim_table(data.rim_defense)
     if rim is not None:
         out["rim_points_saved_per100"] = per100(rim_points_saved(players, rim), players["POSS"])
@@ -142,11 +149,41 @@ def skill_components(players: pd.DataFrame, data, playmaking: pd.DataFrame,
     return out
 
 
+def matchup_difficulty(players: pd.DataFrame, matchups: pd.DataFrame, quality: pd.Series,
+                       prior_poss: float) -> pd.Series:
+    """Per defender: the possession-weighted average quality of the players he guarded, shrunk
+    toward the league's average by `prior_poss` possessions. quality is aligned with `players`.
+    NaN for a player with no matchup rows."""
+    q_by_pid = pd.Series(quality.to_numpy(dtype=float), index=players["PLAYER_ID"].to_numpy())
+    q_by_pid = q_by_pid[~q_by_pid.index.duplicated()]
+    m = pd.DataFrame({"def": matchups["DEF_PLAYER_ID"], "w": matchups["PARTIAL_POSS"].astype(float),
+                      "q": matchups["OFF_PLAYER_ID"].map(q_by_pid)})
+    m = m[m["q"].notna() & (m["w"] > 0)]
+    if m.empty:
+        return pd.Series(np.nan, index=players.index)
+    league = float((m["w"] * m["q"]).sum() / m["w"].sum())
+    by = m.assign(wq=m["w"] * m["q"]).groupby("def")[["wq", "w"]].sum()
+    shrunk = (by["wq"] + prior_poss * league) / (by["w"] + prior_poss)
+    return pd.Series(players["PLAYER_ID"].map(shrunk).to_numpy(dtype=float), index=players.index)
+
+
+def _uses(cfg, component: str) -> bool:
+    return any(w.get(component, 0) > 0 for w in cfg.axes.values())
+
+
 def skill_scores(players: pd.DataFrame, data, playmaking: pd.DataFrame, portability: pd.DataFrame,
                  cfg, pool: pd.Series) -> pd.DataFrame:
     """Columns skill_<name>_raw and skill_<name>_pct for each configured skill, plus sk_<component>.
     cfg: a config.SkillsCfg."""
     comps = skill_components(players, data, playmaking, portability)
+    matchups = getattr(data, "season_matchups", None)
+    if _uses(cfg, "matchup_difficulty") and _present(matchups, "OFF_PLAYER_ID", "DEF_PLAYER_ID", "PARTIAL_POSS"):
+        if cfg.matchup_quality == "offense":
+            quality = players["offense_pct"]
+        else:  # the opponents' creation percentile, from a first pass
+            score = composite(comps, cfg.axes["creation"], pool, (), cfg.min_weight_present, "rank")
+            quality = pd.Series(percentile_against(score, score[pool]), index=players.index)
+        comps["matchup_difficulty"] = matchup_difficulty(players, matchups, quality, cfg.matchup_prior_poss)
     out = pd.DataFrame(index=players.index)
     for skill in cfg.order:
         score = composite(comps, cfg.axes[skill], pool, (), cfg.min_weight_present, "rank")

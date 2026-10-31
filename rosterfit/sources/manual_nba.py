@@ -21,10 +21,10 @@ import pandas as pd
 
 from ..cache import Cache
 from ..seasons import PLAYOFFS, REGULAR, start_year
-from .nba_stats import TABLES, available, request_spec, team_ids
+from .nba_stats import KEEP_COLUMNS, PER_TEAM_TABLES, TABLES, available, request_spec, team_ids
 
 BASE_URL = "https://stats.nba.com/stats/"
-_FILE_HINT = re.compile(r"(gamelog|advanced|passing|catch_shoot|hustle|matchups|scoring|drives|rim_defense)"
+_FILE_HINT = re.compile(r"(gamelog|advanced|passing|catch_shoot|hustle|season_matchups|matchups|scoring|drives|rim_defense)"
                         r"[_-](\d{4}-\d{2})([_-]playoffs)?",
                         re.IGNORECASE)
 # Counting columns we use, per table; per-game downloads are multiplied back up to season totals.
@@ -36,6 +36,7 @@ _COUNT_COLUMNS = {
     "drives": ["DRIVES"],
     "rim_defense": ["D_FGM", "D_FGA", "FGM_LT_06", "FGA_LT_06"],
     "matchups": ["PARTIAL_POSS"],
+    "season_matchups": ["PARTIAL_POSS", "MATCHUP_MIN", "PLAYER_PTS"],
 }
 
 
@@ -58,6 +59,12 @@ def download_jobs(tables: list[str], seasons: list[str], cache: Cache | None = N
                 continue
             for season_type in TABLES[table].season_types:
                 if cache is not None and cache.has(season, season_type, table):
+                    continue
+                if table in PER_TEAM_TABLES:  # one request per defending team, trimmed to what we use
+                    for team in team_ids():
+                        jobs.append({"table": table, "season": season, "season_type": season_type,
+                                     "url": request_url(table, season, season_type, team), "def_team_id": team,
+                                     "keep": KEEP_COLUMNS.get(table)})
                     continue
                 jobs.append({"table": table, "season": season, "season_type": season_type,
                              "url": request_url(table, season, season_type)})
@@ -89,6 +96,16 @@ _SCRIPT = r"""// rosterfit: download NBA.com stats tables from your own browser.
     const first = Array.isArray(rs) ? rs[0] : rs;
     return first && first.rowSet ? first.rowSet.length : 0;
   };
+  // keep only the columns rosterfit uses (per-team matchup tables are large)
+  function trim(data, keep) {
+    const rs = data.resultSets ?? data.resultSet;
+    const first = Array.isArray(rs) ? rs[0] : rs;
+    if (!keep || !first || !first.headers) return data;
+    const idx = keep.map((c) => first.headers.indexOf(c)).filter((i) => i >= 0);
+    first.headers = idx.map((i) => first.headers[i]);
+    first.rowSet = (first.rowSet || []).map((r) => idx.map((i) => r[i]));
+    return data;
+  }
   async function get(url) {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
@@ -107,7 +124,7 @@ _SCRIPT = r"""// rosterfit: download NBA.com stats tables from your own browser.
   for (const [i, job] of JOBS.entries()) {
     const tag = `${i + 1}/${JOBS.length} ${job.table} ${job.season} ${job.season_type}`;
     try {
-      const data = await get(job.url);
+      const data = trim(await get(job.url), job.keep);
       const items = (bySeason[job.season] ??= []);
       if (job.table === "matchups" && rowCount(data) === 0) {
         const urls = MATCHUP_TEAM_URLS[job.season + "|" + job.season_type] || {};
@@ -195,6 +212,8 @@ def identify(resp: dict, filename: str = "") -> tuple[str, str, str, str]:
         table = "hustle"
     elif resource == "matchupsrollup":
         table = "matchups"
+    elif resource == "leagueseasonmatchups":
+        table = "season_matchups"
     season, season_type = p.get("Season"), p.get("SeasonType")
     hint = _FILE_HINT.search(filename)
     if hint:

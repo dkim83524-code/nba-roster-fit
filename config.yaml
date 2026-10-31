@@ -136,10 +136,16 @@ skills:                              # the 3D view: six skills on three axes
     playmaking: {potential_ast_per100: 0.5, ast_pts_created_per100: 0.5}
     spacing: {three_volume: 0.7, three_accuracy: 0.3}          # same as "Fits next to stars"
     screening: {oreb_pct: 0.5, screen_ast_per100: 0.5}
-    perimeter_defense: {stl_per100: 0.3, deflections_per100: 0.4, contested3_per100: 0.3}  # activity
+    # who he guarded (matchup_difficulty) plus activity; steals and deflections alone reward gambling
+    perimeter_defense: {matchup_difficulty: 0.4, deflections_per100: 0.25, contested3_per100: 0.2, stl_per100: 0.15}
     rim_protection: {rim_points_saved_per100: 0.5, rim_contests_per100: 0.2, blk_per100: 0.3}
   min_weight_present: 0.5
   size_floor: 0.35
+  # matchup_difficulty: the possession-weighted average of the players he guarded, rated by their
+  # "creation" percentile (self-creators: the perimeter threats) or "offense" (LEBRON + DARKO
+  # offense, which also rewards guarding star bigs). Pulled toward average by matchup_prior_poss.
+  matchup_quality: creation
+  matchup_prior_poss: 200
 
 team:
   on_court_slots: 5                  # minutes weights sum to 5; a 48-minute player counts 1.0
