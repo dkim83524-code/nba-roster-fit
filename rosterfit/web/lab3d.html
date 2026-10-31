@@ -110,8 +110,10 @@ canvas.stage.dragging { cursor: grabbing; }
 .bar-val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-table { border-collapse: collapse; width: 100%; font-size: 14px; }
-th, td { padding: 6px 8px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { padding: 6px 6px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { padding-left: 10px; }
+th:last-child, td:last-child { padding-right: 10px; }
 th:first-child, td:first-child { text-align: left; }
 thead th { font: 600 11.5px var(--font-body); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
 tbody tr { border-top: 1px solid var(--grid); cursor: pointer; }
@@ -243,14 +245,18 @@ td.hi { font-weight: 700; }
   const hasPlayoffs = (season, abbr) => !!(DATA.teams[season] && DATA.teams[season][abbr] && DATA.teams[season][abbr].playoffs.length);
   const missingSkills = (season) => ORDER.filter((s) => !((SK.available[season] || []).includes(s)));
 
+  /* A skill the whole season lacks (its table isn't downloaded) is drawn at 0 for everyone, so the
+   * other five still show; a single player's gap still keeps his shape off. */
   function entries(season, abbr, mode) {
     const team = DATA.teams[season] && DATA.teams[season][abbr];
     const pairs = team ? team[mode] || [] : [];
+    const gap = new Set(missingSkills(season).map((sk) => ORDER.indexOf(sk)));
     return pairs.map(([pid, min]) => {
       const p = INDEX[season] && INDEX[season].get(pid);
       const s = SKI[season] && SKI[season].get(pid);
+      const pct = s ? s.pct.map((v, i) => (v == null && gap.has(i) ? 0 : v)) : null;
       return { pid, min, name: p ? p.name : String(pid), pos: p ? p.pos : null,
-        pct: s ? s.pct : null, impact: s ? s.impact : null };
+        pct, impact: s ? s.impact : null, gap };
     });
   }
   function score(season, abbr, mode, scale, dirs) {
@@ -262,12 +268,12 @@ td.hi { font-weight: 700; }
 
   /* Every team-season's coverage in the pool, per rotation and scale, to rank a team against. */
   const poolCache = new Map();
-  function coveragePool(mode, scale) {
-    const key = `${mode}|${scale}`;
+  function coveragePool(mode, scale, gapKey) {
+    const key = `${mode}|${scale}|${gapKey}`;
     if (!poolCache.has(key)) {
       const out = [];
       for (const season of M.pool_seasons || []) {
-        if (missingSkills(season).length) continue;
+        if (missingSkills(season).join() !== gapKey) continue;  // compare like with like
         for (const abbr of Object.keys(DATA.teams[season] || {})) {
           if (mode === "playoffs" && !hasPlayoffs(season, abbr)) continue;
           out.push(score(season, abbr, mode, scale).coverage);
@@ -449,8 +455,8 @@ td.hi { font-weight: 700; }
     const gaps = missingSkills(season);
     $("gaps-notice").hidden = !gaps.length;
     if (gaps.length) {
-      $("gaps-notice").textContent = `${season} has no ${gaps.map((s) => SK.labels[s]).join(", ")} numbers yet, so no shapes can be drawn. ` +
-        "Download the scoring, drives and rim defense tables from NBA.com (python -m rosterfit browser-script), then export again.";
+      $("gaps-notice").textContent = `${season} has no ${gaps.map((s) => SK.labels[s]).join(", ")} numbers yet, so ${gaps.length > 1 ? "those ends are" : "that end is"} drawn at 0 for everyone and coverage is ranked only against seasons missing the same. ` +
+        "Once the data is in (python -m rosterfit check shows what's missing), export again.";
     }
     result = score(season, team, mode, scale);
     const order = (DATA.teams[season][team].regular || []).map(([pid]) => pid);
@@ -464,7 +470,7 @@ td.hi { font-weight: 700; }
     $("chart-title").textContent = `${t.name} ${season}`;
     $("chart-sub").textContent = mode === "playoffs" ? "playoff top 8 by minutes" : "regular season rotation";
 
-    const pool = coveragePool(mode, scale);
+    const pool = coveragePool(mode, scale, gaps.join());
     const pct = RF.pctAgainst(pool, result.coverage);
     const cov = result.coverage * 100;
     $("coverage").textContent = drawn.length ? `${cov < 9.95 ? cov.toFixed(1) : Math.round(cov)}%` : "–";
@@ -480,11 +486,11 @@ td.hi { font-weight: 700; }
     const groups = SK.pairs.map((pair, a) => {
       const rows = pair.map((skill) => {
         const i = ORDER.indexOf(skill);
-        const b = result.best[i];
+        const b = gaps.includes(skill) ? null : result.best[i];  // a season-wide gap has no leader
         const who = b ? byPid.get(b.pid) : null;
         const slot = who ? slotOf.get(who.pid) : null;
         const cls = slot != null ? ` c${slot + 1}` : " o";
-        return `<div class="bar-row"><div class="lab"><b>${esc(SK.labels[skill])}</b><span>${who ? esc(who.name) : "nobody"}</span></div>` +
+        return `<div class="bar-row"><div class="lab"><b>${esc(SK.labels[skill])}</b><span>${who ? esc(who.name) : gaps.includes(skill) ? "no data yet" : "nobody"}</span></div>` +
           `<div class="bar-track"><span class="bar-fill${cls}" style="width:${b ? (b.value * 100).toFixed(1) : 0}%"></span></div>` +
           `<span class="bar-val">${b ? Math.round(b.value * 100) : "–"}</span></div>`;
       }).join("");
@@ -500,7 +506,7 @@ td.hi { font-weight: 700; }
       const sw = p.drawn ? `<i class="swatch${slot != null ? ` c${slot + 1}` : ""}"></i>` : `<i class="swatch" style="visibility:hidden"></i>`;
       const top = p.pct ? Math.max(...p.pct.map((v) => v == null ? -1 : v)) : null;
       const cells = ORDER.map((_, i) => {
-        const v = p.pct ? p.pct[i] : null;
+        const v = p.pct && !(p.gap && p.gap.has(i)) ? p.pct[i] : null;  // a season-wide gap shows "–", not 0
         return `<td${v != null && v === top && v >= 80 ? ' class="hi"' : ""}>${fmt(v)}</td>`;
       }).join("");
       const cls = [p.drawn ? "" : "undrawn", p.pid === state.focus ? "is-focus" : ""].filter(Boolean).join(" ");
@@ -585,7 +591,7 @@ td.hi { font-weight: 700; }
     ["Scale", "Percentile (the default here) puts each vertex at the player's percentile. Rank uses distance by rank: the best player reaches the end, and every halving of the rank moves the same step outward, so the top few stand out. In 3D that shrink is cubed, so on Rank only real standouts have visible volume."],
     ["Coverage", "Share of the full shape the players fill together: does someone on the team reach each direction? Ranked against every team-season in the data with the same rotation and scale."],
     ["Overlap", "Total volume of the shapes minus the volume they fill together, in full shapes. Big overlap means players doing the same jobs."],
-    ["Prototype", "Skills are regular-season numbers, in the playoff view too. Shapes need all six skills, so a season without the 3D tables shows none."],
+    ["Prototype", "Skills are regular-season numbers, in the playoff view too. A player needs all six skills to get a shape; a skill missing for a whole season is drawn at 0 until its data is downloaded."],
   ];
   $("glossary").innerHTML = gloss.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("");
   const srcLinks = SOURCES.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name === "LEBRON" ? "LEBRON (BBall Index)" : x.name)}</a>`).join(" and ");

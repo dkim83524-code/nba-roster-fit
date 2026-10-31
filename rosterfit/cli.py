@@ -413,8 +413,9 @@ def cmd_export_web(cfg: Config, args) -> int:
         print(f"      {paths['page_3d']}   (the 3D prototype)")
         missing = _skills_gaps(data)
         if missing:
-            print(f"      3D view: no {', '.join(missing)} yet; run `browser-script` to download "
-                  "the scoring, drives and rim_defense tables", file=sys.stderr)
+            print(f"      3D view: no {', '.join(missing)} yet. Run `check` to see which of the scoring, "
+                  "drives and rim_defense tables are missing (`browser-script` downloads them); if they're "
+                  "all there, the warning above names the columns that weren't recognized", file=sys.stderr)
     print(f"      {paths['data']}   (upload this to Claude to update the shared page)")
     return 0
 

@@ -22,6 +22,8 @@ Each skill is the weighted mean of its rank-standardized components (metrics.poo
 """
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import pandas as pd
 
@@ -47,6 +49,41 @@ SKILL_TABLES = {
 # luck, so it's multiplied by attempts / (attempts + this).
 RIM_PRIOR_ATTEMPTS = 100.0
 RIM_ID = "CLOSE_DEF_PERSON_ID"
+# NBA.com names the columns by defense category: "Overall" sends D_FGM / D_FGA / NORMAL_FG_PCT, the
+# distance categories send their own (FGM_LT_06 ... for "Less Than 6Ft"). Accept either.
+_RIM_ALIASES = {
+    RIM_ID: ("CLOSE_DEF_PERSON_ID", "PLAYER_ID"),
+    "D_FGM": ("D_FGM", "FGM_LT_06"),
+    "D_FGA": ("D_FGA", "FGA_LT_06"),
+    "NORMAL_FG_PCT": ("NORMAL_FG_PCT", "NS_LT_06_PCT"),
+    "allowed_pct": ("D_FG_PCT", "LT_06_PCT"),       # FG% allowed
+    "plusminus": ("PCT_PLUSMINUS", "PLUSMINUS"),     # allowed - normal
+}
+log = logging.getLogger(__name__)
+_warned: set[tuple[str, ...]] = set()
+
+
+def rim_table(rim: pd.DataFrame | None) -> pd.DataFrame | None:
+    """The rim-defense table with standard columns (CLOSE_DEF_PERSON_ID, D_FGM, D_FGA,
+    NORMAL_FG_PCT), whichever names NBA.com used; None when it's missing or unreadable."""
+    if rim is None or rim.empty:
+        return None
+    found = {std: next((c for c in names if c in rim.columns), None) for std, names in _RIM_ALIASES.items()}
+    out = pd.DataFrame({std: rim[col] for std, col in found.items() if col and std in (RIM_ID, "D_FGM", "D_FGA")})
+    if found["NORMAL_FG_PCT"]:
+        out["NORMAL_FG_PCT"] = rim[found["NORMAL_FG_PCT"]]
+    elif found["allowed_pct"] and found["plusminus"]:
+        out["NORMAL_FG_PCT"] = rim[found["allowed_pct"]].astype(float) - rim[found["plusminus"]].astype(float)
+    needed = (RIM_ID, "D_FGM", "D_FGA", "NORMAL_FG_PCT")
+    if all(c in out.columns for c in needed):
+        return out
+    key = tuple(rim.columns)
+    if key not in _warned:  # once per layout, not once per season
+        _warned.add(key)
+        log.warning("rim_defense: can't find shots defended / made / normal FG%% in its columns %s; "
+                    "Protects the rim stays empty. Please send these column names to fix the mapping.",
+                    list(rim.columns))
+    return None
 
 
 def _present(table: pd.DataFrame | None, *columns: str) -> bool:
@@ -94,8 +131,8 @@ def skill_components(players: pd.DataFrame, data, playmaking: pd.DataFrame,
     out["stl_per100"] = _box_rate(players, "STL")
     out["deflections_per100"] = _tracked_rate(players, data.hustle, "DEFLECTIONS")
     out["contested3_per100"] = _tracked_rate(players, data.hustle, "CONTESTED_SHOTS_3PT")
-    rim = data.rim_defense
-    if _present(rim, RIM_ID, "D_FGA", "D_FGM", "NORMAL_FG_PCT"):
+    rim = rim_table(data.rim_defense)
+    if rim is not None:
         out["rim_points_saved_per100"] = per100(rim_points_saved(players, rim), players["POSS"])
         out["rim_contests_per100"] = _tracked_rate(players, rim, "D_FGA", id_col=RIM_ID)
     else:
