@@ -350,10 +350,119 @@
     return salary + reserve <= left + 1e-6;
   }
 
+  /* ---- 3D view: six skills on three axes ---------------------------------------------------
+   * A shape is an octahedron with one vertex on each axis end, in skill order
+   * [x+, x-, y+, y-, z+, z-]: each pair's two skills sit on opposite ends of one axis. The full
+   * octahedron (every radius 1) is the whole space, so a shape's volume share is
+   * (x+ + x-)(y+ + y-)(z+ + z-) / 8: the two ends of an axis add, the three axes multiply. */
+  const AXIS_DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  // the eight faces, as vertex indexes into AXIS_DIRS
+  const OCTA_FACES = [[0, 2, 4], [2, 1, 4], [1, 3, 4], [3, 0, 4], [2, 0, 5], [1, 2, 5], [3, 1, 5], [0, 3, 5]];
+
+  function octaVolumeShare(r) {
+    return ((r[0] + r[1]) * (r[2] + r[3]) * (r[4] + r[5])) / 8;
+  }
+
+  /* Distance from the center to the shape's surface along unit direction (ux, uy, uz): the face
+   * there is x/X + y/Y + z/Z = 1 with that octant's three radii. */
+  function octaRadius(r, ux, uy, uz) {
+    const parts = [[ux, ux >= 0 ? r[0] : r[1]], [uy, uy >= 0 ? r[2] : r[3]], [uz, uz >= 0 ? r[4] : r[5]]];
+    let s = 0;
+    for (const [c, R] of parts) {
+      const a = Math.abs(c);
+      if (a < 1e-12) continue;
+      if (!(R > 0)) return 0;
+      s += a / R;
+    }
+    return s > 0 ? 1 / s : 0;
+  }
+
+  /* n directions spread evenly over the sphere (Fibonacci lattice). */
+  function sphereDirections(n) {
+    const out = [];
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    for (let i = 0; i < n; i++) {
+      const z = 1 - (2 * (i + 0.5)) / n;
+      const rho = Math.sqrt(1 - z * z);
+      const th = golden * i;
+      out.push([rho * Math.cos(th), rho * Math.sin(th), z]);
+    }
+    return out;
+  }
+
+  /* Volume the shapes fill together, as a share of the full octahedron. Each shape is star-shaped
+   * around the center, so the union's surface in any direction is the farthest shape there:
+   * volume = (1/3) * integral of R^3 over the sphere; the full octahedron's is 4/3. */
+  function unionVolumeShare(shapes, dirs) {
+    if (!shapes.length) return 0;
+    let total = 0;
+    for (const [x, y, z] of dirs) {
+      let R = 0;
+      for (const r of shapes) {
+        const q = octaRadius(r, x, y, z);
+        if (q > R) R = q;
+      }
+      total += R * R * R;
+    }
+    return (Math.PI * total) / dirs.length;
+  }
+
+  /* data.skills.players[season] rows -> {season: Map(pid -> {pct: [6], impact})}. */
+  function skillIndex(data) {
+    const out = {};
+    const sk = data.skills;
+    if (!sk) return out;
+    for (const s of Object.keys(sk.players)) {
+      const map = new Map();
+      for (const r of sk.players[s]) map.set(r[0], { pct: r.slice(1, 7), impact: r[7] });
+      out[s] = map;
+    }
+    return out;
+  }
+
+  /* Score a group of players in 3D. entries: [{pid, min, pct: [6], impact}].
+   * opts: {scale, n (qualified players, for the rank scale), sizeFloor, minutes (true: size also
+   * by minutes), minMinutes (draw only players with this many), dirs}.
+   * Size = sizeFloor + (1 - sizeFloor) x impact percentile / 100 (x (min / most minutes)^(1/3) with
+   * minutes on, so volume follows minutes); radius on each axis end = size x radius(skill pct). */
+  function evaluate3d(entries, opts) {
+    const floor = opts.sizeFloor == null ? 0.35 : opts.sizeFloor;
+    const players = entries.map((e) => {
+      const complete = e.pct && e.pct.length === 6 && e.pct.every((v) => v != null) && e.impact != null;
+      return { ...e, drawn: complete && (opts.minMinutes == null || e.min >= opts.minMinutes) };
+    });
+    const drawn = players.filter((p) => p.drawn);
+    const ref = drawn.length ? Math.max(...drawn.map((p) => p.min)) : 1;
+    const shapes = [];
+    let sumVolumes = 0;
+    for (const p of players) {
+      if (!p.drawn) {
+        p.r = null;
+        p.volume = null;
+        continue;
+      }
+      const byMinutes = opts.minutes && ref > 0 ? Math.cbrt(Math.max(p.min, 0) / ref) : 1;
+      p.size = (floor + (1 - floor) * p.impact / 100) * byMinutes;
+      p.r = p.pct.map((v) => p.size * radius(v, opts.n, opts.scale));
+      p.volume = octaVolumeShare(p.r);
+      sumVolumes += p.volume;
+      shapes.push(p.r);
+    }
+    const coverage = unionVolumeShare(shapes, opts.dirs || sphereDirections(1500));
+    // per axis end: who reaches farthest (that's where the team's shape gets its reach)
+    const best = AXIS_DIRS.map((_, i) => {
+      let top = null;
+      for (const p of drawn) if (!top || p.r[i] > top.r[i]) top = p;
+      return top ? { pid: top.pid, value: top.r[i] } : null;
+    });
+    return { players, coverage, sumVolumes, overlap: Math.max(sumVolumes - coverage, 0), best };
+  }
+
   const api = {
     CORNER_XY, radius, rings, shapePoints, shapeArea, unionArea, pctAgainst, evaluate, playerIndex, entriesFor,
     teamContext, evaluateTeam, evaluateLineup, assignColors, placeLabels,
     seededRandom, hashSeed, dealOrder, signingFloor, canAfford,
+    AXIS_DIRS, OCTA_FACES, octaVolumeShare, octaRadius, sphereDirections, unionVolumeShare, skillIndex, evaluate3d,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.RosterFitCore = api;

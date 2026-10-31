@@ -111,6 +111,10 @@ servers, so this step won't work from a hosted environment.
 python -m rosterfit fetch           # 2017-18 to 2025-26: game logs, advanced, passing, C&S, hustle, matchups
 ```
 
+It also fetches three tables only the 3D page uses: scoring (unassisted makes), drives and rim
+defense (shots defended within 6 feet). They're optional: without them the 3D page has gaps and
+nothing else changes.
+
 This is about 60 requests at one per second (more if the matchup endpoint needs per-team calls).
 Everything is cached in `data/cache/` and never re-downloaded unless you pass `--refresh`.
 
@@ -214,6 +218,24 @@ official cap for that season (`SALARY_CAPS` in `sources/contracts.py`; `--cap` o
 shapes come from the latest stats season, for players with 500+ minutes. Sports Reference asks to be
 cited with a link, which the page does.
 
+### The 3D prototype
+
+`export-web` also writes `outputs/web/roster-fit-3d.html`: each player is an octahedron with six
+skills on three axes, which you can turn by dragging.
+
+| Axis | One end | Other end |
+|---|---|---|
+| 1 | Creates his shot: unassisted makes, drives, free-throw attempts | Sets up others: potential assists, assist points created |
+| 2 | Spaces the floor: 3-point volume and accuracy | Screens & crashes: offensive rebound %, screen assists |
+| 3 | Perimeter D: steals, deflections, contested 3s | Protects the rim: points saved within 6 ft, rim contests, blocks |
+
+The two ends of an axis can stand in for each other and the three axes multiply, so a shape's
+volume share is (a + b)(c + d)(e + f) / 8. Shape size comes from the LEBRON + DARKO impact
+percentile (`skills.size_floor` sets the smallest), and in a team view volume also follows minutes.
+Coverage is the volume the shapes fill together, ranked against every team-season. The skills and
+their weights live under `skills:` in `config.yaml`. In this prototype, the playoff view still uses
+regular-season skills.
+
 `rosterfit/web/core.js` repeats the team math for the browser, and `tests/test_web.py` checks it
 against `team.py` on every team in the synthetic league. The page and `roster-fit-data.json`
 contain NBA.com, DARKO and LEBRON numbers, so `outputs/` stays git-ignored: share the page privately, and
@@ -258,13 +280,14 @@ rosterfit/
   sources/            nba_stats.py (nba_api), manual_nba.py (files saved from the browser),
                       darko.py (your DARKO and LEBRON CSVs), formulas.py (Taylor's formulas),
                       contracts.py (Basketball-Reference contracts, for the cap game)
-  metrics/            offense_defense, playmaking, portability, pool (z / percentiles), players
+  metrics/            offense_defense, playmaking, portability, skills (3D), pool (z / percentiles), players
   team.py             weights, caps, redundancy, team percentiles, coverage, overlap
   geometry.py         shapes, areas, union (shapely)
   plot.py             matplotlib chart
   synthetic.py        made-up league for the demo and tests
   explain.py          ingredient breakdown behind playmaking and portability
-  web/                the website: app.html (page), core.js (browser math), __init__.py (export)
+  web/                the website: app.html (page), lab3d.html (3D prototype), core.js (browser
+                      math), __init__.py (export)
   cli.py              fetch | browser-script | check | plot | compare | explain | demo | export-web
 ```
 

@@ -1,0 +1,604 @@
+<title>Roster Fit 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: the Roster Fit Lab workbench, one tool: the turning shape (left) and its numbers (right),
+   stacking on phones. Same gym-wall neutrals and ball-orange accent; player colors are the Lab's
+   validated chart palette, so a player keeps his color across both pages. */
+:root {
+  --bg: #eef1ed;
+  --surface: #ffffff;
+  --surface-2: #f6f8f5;
+  --ink: #14211b;
+  --ink-2: #4b5953;
+  --muted: #76847e;
+  --line: #d6ddd9;
+  --grid: #e2e8e4;
+  --axis: #bcc6c1;
+  --accent: #c2410c;
+  --accent-soft: #fbe5d8;
+  --on-accent: #ffffff;
+  --other: #8b9690;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --font-body: "Barlow", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --radius: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1512; --surface: #151f1b; --surface-2: #1a2520; --ink: #e6eee9; --ink-2: #b2c0b9;
+    --muted: #84928c; --line: #29352f; --grid: #222e28; --axis: #3a4842; --accent: #fb8a4c;
+    --accent-soft: #3b251a; --on-accent: #1a0e07; --other: #7f8b86;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1512; --surface: #151f1b; --surface-2: #1a2520; --ink: #e6eee9; --ink-2: #b2c0b9;
+  --muted: #84928c; --line: #29352f; --grid: #222e28; --axis: #3a4842; --accent: #fb8a4c;
+  --accent-soft: #3b251a; --on-accent: #1a0e07; --other: #7f8b86;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+.app { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 32px; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 700; letter-spacing: .01em; text-wrap: balance; margin: 0; }
+button, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding-block: 18px 14px; border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand svg { width: 30px; height: 30px; }
+.brand h1 { font-size: 28px; line-height: 1; }
+.brand small { display: block; font: 500 12px var(--font-body); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; margin-top: 3px; }
+.scale-switch { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.scale-switch > span { font: 600 12px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+@media (max-width: 480px) { .scale-switch { margin-left: 0; } }
+.notice { margin: 12px 0 0; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: 14px; max-width: 80ch; }
+
+.view { padding-top: 18px; }
+.controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; margin-bottom: 16px; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field > span { font: 600 12px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.field.grow { flex: 1 1 220px; }
+select { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; max-width: 100%; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg-btn { border: 0; background: none; padding: 8px 12px; cursor: pointer; color: var(--ink-2); }
+.scale-switch .seg-btn { padding: 6px 11px; }
+.seg-btn[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.seg-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.split { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); gap: 20px; align-items: start; }
+@media (max-width: 880px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 14px 10px; min-width: 0; }
+.chart-title { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 4px; }
+.chart-title h2 { font-size: 24px; }
+.chart-title span { color: var(--muted); font-size: 13px; }
+.stage-wrap { position: relative; max-width: 620px; margin-inline: auto; }
+canvas.stage { display: block; width: 100%; max-width: 100%; aspect-ratio: 1 / 1; touch-action: pan-y; cursor: grab; }
+canvas.stage.dragging { cursor: grabbing; }
+.spin { position: absolute; right: 4px; top: 4px; }
+.hint { margin: 4px 0 0; min-height: 1.45em; font-size: 13px; color: var(--ink-2); text-align: center; }
+
+.panel { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.stats { display: grid; grid-template-columns: 1.35fr 1fr 1fr; gap: 10px; }
+@media (max-width: 480px) { .stats { grid-template-columns: 1fr 1fr; } .stat.hero { grid-column: 1 / -1; } }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; min-width: 0; }
+.stat-label { font: 600 12px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.stat-value { font: 700 34px/1.05 var(--font-display); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.stat.hero .stat-value { font-size: 56px; }
+.stat-note { font-size: 12.5px; color: var(--ink-2); }
+
+.reach h3 { font-size: 20px; }
+.reach > p { margin: 2px 0 10px; font-size: 13px; color: var(--ink-2); }
+.axis-group { display: grid; gap: 6px; padding-block: 8px; border-top: 1px solid var(--grid); }
+.axis-group:first-of-type { border-top: 0; padding-top: 0; }
+.axis-cap { font: 600 11.5px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.bar-row { display: grid; grid-template-columns: minmax(0, 10.5em) minmax(0, 1fr) 2.4em; align-items: center; gap: 10px; }
+.bar-row .lab { min-width: 0; line-height: 1.2; }
+.bar-row .lab b { display: block; font-weight: 600; font-size: 14px; }
+.bar-row .lab span { display: block; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 10px; background: var(--grid); border-radius: 5px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: var(--c, var(--ink)); border-radius: 5px; }
+.bar-fill.o { background: var(--other); }
+.bar-val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 6px 8px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+thead th { font: 600 11.5px var(--font-body); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+tbody tr { border-top: 1px solid var(--grid); cursor: pointer; }
+tbody tr:hover { background: var(--surface-2); }
+tbody tr.is-focus { background: var(--accent-soft); }
+tbody tr.undrawn { cursor: default; }
+tbody tr.undrawn td { color: var(--muted); }
+td .pos { color: var(--muted); font-size: 12px; margin-left: 4px; }
+td.hi { font-weight: 700; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--other)); margin-right: 8px; }
+.c1 { --c: var(--s1); } .c2 { --c: var(--s2); } .c3 { --c: var(--s3); } .c4 { --c: var(--s4); }
+.c5 { --c: var(--s5); } .c6 { --c: var(--s6); } .c7 { --c: var(--s7); } .c8 { --c: var(--s8); }
+@media (max-width: 480px) { table { font-size: 13px; } th, td { padding: 6px 4px; } thead th { font-size: 10.5px; letter-spacing: .02em; } .swatch { margin-right: 5px; } }
+
+.foot { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 10px; font-size: 13.5px; color: var(--ink-2); }
+.foot details { max-width: 76ch; }
+.foot summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+.foot dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 10px 0 0; }
+@media (max-width: 480px) { .foot dl { grid-template-columns: minmax(0, 1fr); } .foot dd { margin-bottom: 6px; } }
+.foot dt { font-weight: 600; color: var(--ink); }
+.foot dd { margin: 0; }
+.foot a { color: inherit; }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="-12 -12 24 24" aria-hidden="true"><polygon points="0,-10 9,0 0,10 -9,0" fill="none" stroke="currentColor" stroke-width="1.5"/><polygon points="0,-10 3,1 0,10 -9,0" fill="var(--accent)" fill-opacity=".35" stroke="var(--accent)" stroke-width="1.2"/><line x1="-9" y1="0" x2="9" y2="0" stroke="currentColor" stroke-width=".8" stroke-dasharray="1.5 1.5"/></svg>
+      <div><h1>Roster Fit 3D</h1><small id="brand-sub">Prototype</small></div>
+    </div>
+    <div class="scale-switch">
+      <span id="scale-label">Scale</span>
+      <div class="seg" role="group" aria-labelledby="scale-label">
+        <button class="seg-btn" id="scale-percentile" aria-pressed="false" title="Vertex at the player's percentile">Percentile</button>
+        <button class="seg-btn" id="scale-rank" aria-pressed="false" title="Vertex by rank: the top few stand out">Rank</button>
+      </div>
+    </div>
+  </header>
+  <p class="notice" id="synthetic-notice" hidden>Preview with a made-up league: the teams, names and numbers aren't real.</p>
+  <p class="notice" id="gaps-notice" hidden></p>
+
+  <section class="view">
+    <div class="controls">
+      <label class="field"><span>Season</span><select id="season"></select></label>
+      <label class="field grow"><span>Team</span><select id="team"></select></label>
+      <div class="field"><span>Rotation</span>
+        <div class="seg" role="group" aria-label="Rotation">
+          <button class="seg-btn" id="mode-regular" aria-pressed="true">Regular season</button>
+          <button class="seg-btn" id="mode-playoffs" aria-pressed="false">Playoff top 8</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="card">
+        <div class="chart-title"><h2 id="chart-title">Team</h2><span id="chart-sub"></span></div>
+        <div class="stage-wrap">
+          <canvas class="stage" id="stage" role="img" aria-label="The team's player shapes in three dimensions"></canvas>
+          <div class="seg spin"><button class="seg-btn" id="spin" aria-pressed="true">Spinning</button></div>
+        </div>
+        <p class="hint" id="hint"></p>
+      </div>
+
+      <div class="panel">
+        <div class="stats">
+          <div class="stat hero"><span class="stat-label">Coverage</span><span class="stat-value" id="coverage">–</span><span class="stat-note" id="coverage-note"></span></div>
+          <div class="stat"><span class="stat-label">Overlap</span><span class="stat-value" id="overlap">–</span><span class="stat-note">shapes' shared volume</span></div>
+          <div class="stat"><span class="stat-label">Shapes</span><span class="stat-value" id="drawn">–</span><span class="stat-note" id="drawn-note"></span></div>
+        </div>
+        <div class="card reach">
+          <h3>Reach on each skill</h3>
+          <p>How far toward each end the team's best player there gets. The two ends of an axis can stand in for each other.</p>
+          <div id="reach"></div>
+        </div>
+        <div class="table-wrap"><table id="table"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <details open>
+      <summary>How to read the 3D view</summary>
+      <dl id="glossary"></dl>
+    </details>
+    <p id="sources"></p>
+  </footer>
+</div>
+
+<script type="application/json" id="rf-data">/*__ROSTERFIT_DATA__*/</script>
+<script>/*__ROSTERFIT_CORE__*/</script>
+<script>
+(function () {
+  "use strict";
+  const DATA = JSON.parse(document.getElementById("rf-data").textContent);
+  const RF = window.RosterFitCore;
+  const M = DATA.meta;
+  const SK = DATA.skills;
+  const INDEX = RF.playerIndex(DATA);
+  const SKI = RF.skillIndex(DATA);
+  const SEASONS = M.seasons.slice();
+  const LATEST = SEASONS[SEASONS.length - 1];
+  const ORDER = SK.order;            // [x+, x-, y+, y-, z+, z-]
+  const DIRS = RF.sphereDirections(1000);
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+  const fmt = (v) => (v == null ? "–" : String(Math.round(v)));
+  const mins = (v) => Math.round(v).toLocaleString("en-US");
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } },
+  };
+  const SHORT = { creation: "Create", playmaking: "Set up", spacing: "Space", screening: "Screen",
+    perimeter_defense: "Perim D", rim_protection: "Rim" };
+  const shortOf = (s) => SHORT[s] || SK.labels[s].split(" ")[0];
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const state = {
+    season: LATEST, team: null, mode: "regular",
+    // percentile by default here: a volume cubes the rank scale's shrink, so most shapes vanish
+    scale: store.get("rf3d-scale") === "rank" ? "rank" : "percentile",
+    focus: null, yaw: -0.65, pitch: 0.42, spinning: !reduceMotion,
+  };
+  let result = null;
+  let view = [];   // drawn players with color slots, for the canvas
+
+  /* ---- teams ---- */
+  const teamsIn = (season) => Object.entries(DATA.teams[season] || {})
+    .map(([abbr, t]) => ({ abbr, name: t.name })).sort((a, b) => a.name.localeCompare(b.name));
+  const hasPlayoffs = (season, abbr) => !!(DATA.teams[season] && DATA.teams[season][abbr] && DATA.teams[season][abbr].playoffs.length);
+  const missingSkills = (season) => ORDER.filter((s) => !((SK.available[season] || []).includes(s)));
+
+  function entries(season, abbr, mode) {
+    const team = DATA.teams[season] && DATA.teams[season][abbr];
+    const pairs = team ? team[mode] || [] : [];
+    return pairs.map(([pid, min]) => {
+      const p = INDEX[season] && INDEX[season].get(pid);
+      const s = SKI[season] && SKI[season].get(pid);
+      return { pid, min, name: p ? p.name : String(pid), pos: p ? p.pos : null,
+        pct: s ? s.pct : null, impact: s ? s.impact : null };
+    });
+  }
+  function score(season, abbr, mode, scale, dirs) {
+    return RF.evaluate3d(entries(season, abbr, mode), {
+      scale, n: (M.qualified && M.qualified[season]) || 1, sizeFloor: SK.size_floor, minutes: true,
+      minMinutes: mode === "playoffs" ? null : M.min_minutes_to_draw, dirs: dirs || DIRS,
+    });
+  }
+
+  /* Every team-season's coverage in the pool, per rotation and scale, to rank a team against. */
+  const poolCache = new Map();
+  function coveragePool(mode, scale) {
+    const key = `${mode}|${scale}`;
+    if (!poolCache.has(key)) {
+      const out = [];
+      for (const season of M.pool_seasons || []) {
+        if (missingSkills(season).length) continue;
+        for (const abbr of Object.keys(DATA.teams[season] || {})) {
+          if (mode === "playoffs" && !hasPlayoffs(season, abbr)) continue;
+          out.push(score(season, abbr, mode, scale).coverage);
+        }
+      }
+      poolCache.set(key, out.sort((a, b) => a - b));
+    }
+    return poolCache.get(key);
+  }
+
+  /* ---- canvas ---- */
+  const canvas = $("stage");
+  const ctx = canvas.getContext("2d");
+  let colors = {};
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement);
+    const v = (n) => cs.getPropertyValue(n).trim();
+    colors = { ink: v("--ink"), ink2: v("--ink-2"), muted: v("--muted"), grid: v("--grid"), axis: v("--axis"),
+      surface: v("--surface"), other: v("--other"), accent: v("--accent"),
+      slots: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => v(`--s${i}`)) };
+  }
+  readColors();
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readColors(); draw(); });
+  new MutationObserver(() => { readColors(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  // model axes: x = first pair, y = second pair (depth), z = third pair (up: perimeter, down: rim)
+  function project(p, W) {
+    const [x, y, z] = p;
+    const cy = Math.cos(state.yaw), sy = Math.sin(state.yaw);
+    const cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
+    const x1 = x * cy - y * sy;
+    const y1 = x * sy + y * cy;
+    const y2 = y1 * cp - z * sp;
+    const z2 = y1 * sp + z * cp;
+    const D = 5;
+    const f = D / (D + y2);
+    const k = W * 0.35;
+    return [W / 2 + k * x1 * f, W / 2 - k * z2 * f, y2];
+  }
+  const vertex = (i, r) => RF.AXIS_DIRS[i].map((c) => c * r);
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = canvas.clientWidth || 500;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(w * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+  new ResizeObserver(resize).observe(canvas);
+
+  function line(a, b, color, width, dash) {
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(b[0], b[1]);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dash || []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function draw() {
+    const W = canvas.clientWidth || 500;
+    ctx.clearRect(0, 0, W, W);
+    // the full octahedron's edges and the three axes
+    const full = RF.AXIS_DIRS.map((d) => project(d, W));
+    const edges = [[0, 2], [2, 1], [1, 3], [3, 0], [0, 4], [1, 4], [2, 4], [3, 4], [0, 5], [1, 5], [2, 5], [3, 5]];
+    for (const [a, b] of edges) line(full[a], full[b], colors.axis, 1, [3, 4]);
+    for (let i = 0; i < 6; i += 2) line(full[i], full[i + 1], colors.axis, 1);
+    // guide dots on each axis: the scale's rings
+    const n = (M.qualified && M.qualified[state.season]) || 1;
+    for (const [d] of RF.rings(n, state.scale)) {
+      for (let i = 0; i < 6; i++) {
+        const q = project(vertex(i, d), W);
+        ctx.beginPath();
+        ctx.arc(q[0], q[1], 2, 0, 2 * Math.PI);
+        ctx.fillStyle = colors.axis;
+        ctx.fill();
+      }
+    }
+    // faces of every shape, far to near
+    const faces = [];
+    for (const p of view) {
+      const pts = p.r.map((r, i) => project(vertex(i, r), W));
+      for (const f of RF.OCTA_FACES) {
+        faces.push({ p, pts: f.map((i) => pts[i]), depth: (pts[f[0]][2] + pts[f[1]][2] + pts[f[2]][2]) / 3 });
+      }
+    }
+    faces.sort((a, b) => b.depth - a.depth);
+    const focusing = state.focus != null && view.some((p) => p.pid === state.focus);
+    for (const { p, pts } of faces) {
+      const color = p.slot != null ? colors.slots[p.slot] : colors.other;
+      const dim = focusing && p.pid !== state.focus;
+      const lit = focusing && p.pid === state.focus;
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      ctx.lineTo(pts[1][0], pts[1][1]);
+      ctx.lineTo(pts[2][0], pts[2][1]);
+      ctx.closePath();
+      ctx.globalAlpha = dim ? 0.03 : lit ? 0.26 : p.slot != null ? 0.12 : 0.05;
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.globalAlpha = dim ? 0.12 : p.slot != null ? 0.9 : 0.45;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lit ? 2.2 : p.slot != null ? 1.3 : 0.8;
+      ctx.lineJoin = "round";
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // axis-end labels
+    ctx.font = `600 ${W < 420 ? 12 : 13.5}px ${getComputedStyle(document.body).fontFamily}`;
+    ctx.textBaseline = "middle";
+    ORDER.forEach((skill, i) => {
+      const q = project(vertex(i, 1.13), W);
+      const text = SK.labels[skill];
+      const w = ctx.measureText(text).width;
+      let x = q[0] - w / 2;
+      x = Math.min(Math.max(x, 4), W - w - 4);
+      const y = Math.min(Math.max(q[1], 10), W - 10);
+      ctx.fillStyle = q[2] > 0.35 ? colors.muted : colors.ink;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = colors.surface;
+      ctx.strokeText(text, x, y);
+      ctx.fillText(text, x, y);
+    });
+  }
+
+  /* drag to turn; horizontal drags on phones, so the page still scrolls */
+  let drag = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    canvas.setPointerCapture(e.pointerId);
+    canvas.classList.add("dragging");
+    setSpin(false);
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    state.yaw += (e.clientX - drag.x) * 0.01;
+    state.pitch = Math.min(1.45, Math.max(-1.45, state.pitch + (e.clientY - drag.y) * 0.01));
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    draw();
+  });
+  const endDrag = () => { drag = null; canvas.classList.remove("dragging"); };
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
+  canvas.addEventListener("keydown", (e) => {
+    const step = { ArrowLeft: [-0.15, 0], ArrowRight: [0.15, 0], ArrowUp: [0, -0.15], ArrowDown: [0, 0.15] }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    setSpin(false);
+    state.yaw += step[0];
+    state.pitch = Math.min(1.45, Math.max(-1.45, state.pitch + step[1]));
+    draw();
+  });
+  canvas.tabIndex = 0;
+
+  let last = null;
+  function tick(t) {
+    if (!state.spinning) { last = null; return; }
+    if (last != null) state.yaw += (t - last) * 0.00025;
+    last = t;
+    draw();
+    requestAnimationFrame(tick);
+  }
+  function setSpin(on) {
+    if (state.spinning === on) return;
+    state.spinning = on;
+    $("spin").setAttribute("aria-pressed", String(on));
+    $("spin").textContent = on ? "Spinning" : "Spin";
+    if (on) requestAnimationFrame(tick);
+  }
+  $("spin").addEventListener("click", () => setSpin(!state.spinning));
+
+  /* ---- panel ---- */
+  function render() {
+    const { season, team, mode, scale } = state;
+    const gaps = missingSkills(season);
+    $("gaps-notice").hidden = !gaps.length;
+    if (gaps.length) {
+      $("gaps-notice").textContent = `${season} has no ${gaps.map((s) => SK.labels[s]).join(", ")} numbers yet, so no shapes can be drawn. ` +
+        "Download the scoring, drives and rim defense tables from NBA.com (python -m rosterfit browser-script), then export again.";
+    }
+    result = score(season, team, mode, scale);
+    const order = (DATA.teams[season][team].regular || []).map(([pid]) => pid);
+    const drawn = result.players.filter((p) => p.drawn).sort((a, b) => b.min - a.min);
+    const slots = RF.assignColors(drawn.slice(0, 8).map((p) => p.pid), order, 8);
+    view = drawn.map((p) => ({ ...p, slot: slots.has(p.pid) ? slots.get(p.pid) : null }));
+    const slotOf = new Map(view.map((p) => [p.pid, p.slot]));
+    if (state.focus != null && !view.some((p) => p.pid === state.focus)) state.focus = null;
+
+    const t = DATA.teams[season][team];
+    $("chart-title").textContent = `${t.name} ${season}`;
+    $("chart-sub").textContent = mode === "playoffs" ? "playoff top 8 by minutes" : "regular season rotation";
+
+    const pool = coveragePool(mode, scale);
+    const pct = RF.pctAgainst(pool, result.coverage);
+    const cov = result.coverage * 100;
+    $("coverage").textContent = drawn.length ? `${cov < 9.95 ? cov.toFixed(1) : Math.round(cov)}%` : "–";
+    $("coverage-note").textContent = drawn.length
+      ? (pct == null ? "of the full shape" : `of the full shape; better than ${Math.round(pct)}% of ${pool.length} team-seasons`)
+      : "no shapes to measure";
+    $("overlap").textContent = drawn.length ? result.overlap.toFixed(2) : "–";
+    $("drawn").textContent = String(drawn.length);
+    $("drawn-note").textContent = mode === "playoffs" ? "every rotation player" : `players with ${M.min_minutes_to_draw}+ min`;
+
+    // reach per skill, grouped by axis
+    const byPid = new Map(result.players.map((p) => [p.pid, p]));
+    const groups = SK.pairs.map((pair, a) => {
+      const rows = pair.map((skill) => {
+        const i = ORDER.indexOf(skill);
+        const b = result.best[i];
+        const who = b ? byPid.get(b.pid) : null;
+        const slot = who ? slotOf.get(who.pid) : null;
+        const cls = slot != null ? ` c${slot + 1}` : " o";
+        return `<div class="bar-row"><div class="lab"><b>${esc(SK.labels[skill])}</b><span>${who ? esc(who.name) : "nobody"}</span></div>` +
+          `<div class="bar-track"><span class="bar-fill${cls}" style="width:${b ? (b.value * 100).toFixed(1) : 0}%"></span></div>` +
+          `<span class="bar-val">${b ? Math.round(b.value * 100) : "–"}</span></div>`;
+      }).join("");
+      return `<div class="axis-group"><span class="axis-cap">Axis ${a + 1}</span>${rows}</div>`;
+    });
+    $("reach").innerHTML = groups.join("");
+
+    // player table
+    const rows = result.players.slice().sort((a, b) => b.min - a.min);
+    const head = `<thead><tr><th>Player</th><th>Min</th><th title="LEBRON + DARKO impact percentile: sets the shape's size">Impact</th>${ORDER.map((s) => `<th title="${esc(SK.labels[s])}">${esc(shortOf(s))}</th>`).join("")}</tr></thead>`;
+    const body = rows.map((p) => {
+      const slot = slotOf.has(p.pid) ? slotOf.get(p.pid) : null;
+      const sw = p.drawn ? `<i class="swatch${slot != null ? ` c${slot + 1}` : ""}"></i>` : `<i class="swatch" style="visibility:hidden"></i>`;
+      const top = p.pct ? Math.max(...p.pct.map((v) => v == null ? -1 : v)) : null;
+      const cells = ORDER.map((_, i) => {
+        const v = p.pct ? p.pct[i] : null;
+        return `<td${v != null && v === top && v >= 80 ? ' class="hi"' : ""}>${fmt(v)}</td>`;
+      }).join("");
+      const cls = [p.drawn ? "" : "undrawn", p.pid === state.focus ? "is-focus" : ""].filter(Boolean).join(" ");
+      return `<tr data-pid="${p.pid}"${cls ? ` class="${cls}"` : ""}${p.drawn ? ' tabindex="0"' : ""}><td>${sw}${esc(p.name)}${p.pos ? `<span class="pos">${esc(p.pos)}</span>` : ""}</td><td>${mins(p.min)}</td><td>${fmt(p.impact)}</td>${cells}</tr>`;
+    }).join("");
+    $("table").innerHTML = head + `<tbody>${body}</tbody>`;
+
+    const ringNote = scale === "rank" ? "Dots on each axis mark the top 5, 20 and 50." : "Dots on each axis mark the 25th, 50th and 75th percentiles.";
+    $("hint").textContent = `Drag to turn it. Tap a player to pick out his shape. ${ringNote}`;
+    draw();
+  }
+
+  $("table").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-pid]");
+    if (!tr || tr.classList.contains("undrawn")) return;
+    const pid = Number(tr.dataset.pid);
+    state.focus = state.focus === pid ? null : pid;
+    render();
+  });
+  $("table").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const tr = e.target.closest("tr[data-pid]");
+    if (!tr) return;
+    e.preventDefault();
+    tr.click();
+  });
+
+  /* ---- controls ---- */
+  const seasonSel = $("season");
+  const teamSel = $("team");
+  seasonSel.replaceChildren(...SEASONS.slice().reverse().map((s) => new Option(s, s)));
+  seasonSel.value = state.season;
+  function fillTeams() {
+    const list = teamsIn(state.season);
+    teamSel.replaceChildren(...list.map((t) => new Option(t.name === t.abbr ? t.abbr : `${t.name} (${t.abbr})`, t.abbr)));
+    const abbrs = list.map((t) => t.abbr);
+    if (!abbrs.includes(state.team)) state.team = ["DEM", "NYK", "OKC", "BOS"].find((a) => abbrs.includes(a)) || abbrs[0];
+    teamSel.value = state.team;
+  }
+  function syncMode() {
+    const po = hasPlayoffs(state.season, state.team);
+    if (!po && state.mode === "playoffs") state.mode = "regular";
+    $("mode-playoffs").disabled = !po;
+    $("mode-playoffs").title = po ? "" : "Didn't make the playoffs";
+    $("mode-regular").setAttribute("aria-pressed", String(state.mode === "regular"));
+    $("mode-playoffs").setAttribute("aria-pressed", String(state.mode === "playoffs"));
+  }
+  function syncScale() {
+    $("scale-percentile").setAttribute("aria-pressed", String(state.scale === "percentile"));
+    $("scale-rank").setAttribute("aria-pressed", String(state.scale === "rank"));
+  }
+  seasonSel.addEventListener("change", () => { state.season = seasonSel.value; state.focus = null; fillTeams(); syncMode(); render(); });
+  teamSel.addEventListener("change", () => { state.team = teamSel.value; state.focus = null; syncMode(); render(); });
+  $("mode-regular").addEventListener("click", () => { state.mode = "regular"; syncMode(); render(); });
+  $("mode-playoffs").addEventListener("click", () => { state.mode = "playoffs"; syncMode(); render(); });
+  for (const sc of ["percentile", "rank"]) {
+    $(`scale-${sc}`).addEventListener("click", () => { state.scale = sc; store.set("rf3d-scale", sc); syncScale(); render(); });
+  }
+
+  /* ---- glossary + sources ---- */
+  const COMPONENT_NAMES = {
+    unassisted_fgm_per100: "unassisted makes", drives_per100: "drives", fta_per100: "free-throw attempts",
+    potential_ast_per100: "potential assists", ast_pts_created_per100: "points created by assists",
+    three_volume: "3-point attempts (catch-and-shoot counts 1.5x)", three_accuracy: "3P% on those, steadied for small samples",
+    oreb_pct: "offensive rebound %", screen_ast_per100: "screen assists",
+    stl_per100: "steals", deflections_per100: "deflections", contested3_per100: "contested 3s",
+    rim_points_saved_per100: "points saved at the rim (vs the shooters' normal FG% within 6 ft)",
+    rim_contests_per100: "shots defended within 6 ft", blk_per100: "blocks",
+  };
+  const mixOf = (skill) => {
+    const w = SK.components[skill];
+    const total = Object.values(w).reduce((a, b) => a + b, 0);
+    return Object.entries(w).map(([c, v]) => `${COMPONENT_NAMES[c] || c} ${Math.round((100 * v) / total)}%`).join(", ");
+  };
+  const SOURCES = M.impact_sources || [];
+  const gloss = [
+    ["Axes", SK.pairs.map((p, i) => `${i + 1}: ${SK.labels[p[0]]} and ${SK.labels[p[1]]}`).join("; ") +
+      ". The two ends of an axis are skills that can stand in for each other; the three axes are things every lineup needs."],
+    ["Volume", "A shape's volume share is (one end + the other end) on each axis, multiplied across the three axes, divided by 8. A player strong on all three axes fills far more than one great at a single thing."],
+    ...ORDER.map((s) => [SK.labels[s], `Per 100 possessions where it's a count: ${mixOf(s)}. Each piece is ranked among the season's qualified players, then combined into a league percentile.`]),
+    ["Shape size", `Set by overall impact (${SOURCES.map((x) => x.name).join(" + ") || "plus-minus"}, offense plus defense) as a league percentile. The lowest-impact player's shape is ${Math.round(SK.size_floor * 100)}% as wide as the best's. On a team, volume also follows minutes played.`],
+    ["Scale", "Percentile (the default here) puts each vertex at the player's percentile. Rank uses distance by rank: the best player reaches the end, and every halving of the rank moves the same step outward, so the top few stand out. In 3D that shrink is cubed, so on Rank only real standouts have visible volume."],
+    ["Coverage", "Share of the full shape the players fill together: does someone on the team reach each direction? Ranked against every team-season in the data with the same rotation and scale."],
+    ["Overlap", "Total volume of the shapes minus the volume they fill together, in full shapes. Big overlap means players doing the same jobs."],
+    ["Prototype", "Skills are regular-season numbers, in the playoff view too. Shapes need all six skills, so a season without the 3D tables shows none."],
+  ];
+  $("glossary").innerHTML = gloss.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("");
+  const srcLinks = SOURCES.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name === "LEBRON" ? "LEBRON (BBall Index)" : x.name)}</a>`).join(" and ");
+  $("sources").innerHTML = `Data: player and tracking stats from <a href="https://www.nba.com/stats" target="_blank" rel="noopener">NBA.com</a> via nba_api${srcLinks ? `; shape size from ${srcLinks}` : ""}. Seasons ${esc(SEASONS[0])} to ${esc(LATEST)}, built ${esc(M.generated)}. A personal project, not affiliated with the NBA.`;
+  $("brand-sub").textContent = `Prototype · ${SEASONS[0]} to ${LATEST}`;
+  $("synthetic-notice").hidden = !M.synthetic;
+
+  fillTeams();
+  syncMode();
+  syncScale();
+  $("spin").setAttribute("aria-pressed", String(state.spinning));
+  $("spin").textContent = state.spinning ? "Spinning" : "Spin";
+  render();
+  if (state.spinning) requestAnimationFrame(tick);
+})();
+</script>

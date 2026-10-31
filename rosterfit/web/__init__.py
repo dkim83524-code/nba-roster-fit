@@ -86,7 +86,7 @@ def build_web_data(league: League, cfg: Config, synthetic: bool = False,
         caps[mode] = {s: {c: _num(league.cap(c, s, mode)) for c in cfg.team.capped_corners} for s in seasons}
     one_worth = {s: {c: _num(league.one_worth(c, s)) for c in cfg.team.capped_corners} for s in seasons}
 
-    return {
+    data = {
         "meta": {
             "generated": dt.date.today().isoformat(),
             "synthetic": synthetic,
@@ -120,6 +120,39 @@ def build_web_data(league: League, cfg: Config, synthetic: bool = False,
         "pools": pools,
         "caps": caps,
         "one_worth": one_worth,
+    }
+    if cfg.skills.enabled:
+        data["skills"] = skills_block(league, cfg)
+    return data
+
+
+def _r1(x):
+    x = _num(x)
+    return None if x is None else round(x, 1)
+
+
+def skills_block(league: League, cfg: Config) -> dict:
+    """The 3D view's data: per season, [pid, six skill percentiles in cfg.skills.order, impact pct]."""
+    sk = cfg.skills
+    order = sk.order
+    players, available = {}, {}
+    for season in sorted(league.players):
+        table = league.players[season]
+        cols = [f"skill_{s}_pct" for s in order]
+        if not set(cols) <= set(table.columns):
+            continue
+        q = table[table["qualified"]]
+        available[season] = [s for s, c in zip(order, cols) if q[c].notna().any()]
+        players[season] = [[int(r.PLAYER_ID)] + [_r1(getattr(r, c)) for c in cols] + [_r1(r.impact_pct)]
+                           for r in table.itertuples(index=False)]
+    return {
+        "order": order,
+        "pairs": sk.pairs,
+        "labels": {s: sk.labels.get(s, s.replace("_", " ")) for s in order},
+        "components": {s: {c: w for c, w in sk.axes[s].items() if w > 0} for s in order},
+        "size_floor": sk.size_floor,
+        "available": available,
+        "players": players,
     }
 
 
@@ -156,9 +189,9 @@ def add_game(data: dict, contract_season: str, contracts: pd.DataFrame, cap: flo
             "unmatched": unmatched}
 
 
-def render_page(data: dict) -> str:
-    """The app as a page fragment (title, styles, markup, scripts) with the data inlined."""
-    page = (HERE / "app.html").read_text(encoding="utf-8")
+def render_page(data: dict, template: str = "app.html") -> str:
+    """A page as a fragment (title, styles, markup, scripts) with the data inlined."""
+    page = (HERE / template).read_text(encoding="utf-8")
     core = (HERE / "core.js").read_text(encoding="utf-8")
     payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")
     return page.replace(_CORE_SLOT, core).replace(_DATA_SLOT, payload)
@@ -171,6 +204,11 @@ def standalone(fragment: str) -> str:
             "</head>\n<body>\n" + fragment + "\n</body>\n</html>\n")
 
 
+def data_3d(data: dict) -> dict:
+    """What the 3D page needs (no team pools, caps or cap game)."""
+    return {k: data[k] for k in ("meta", "players", "teams", "skills") if k in data}
+
+
 def write_web(data: dict, out_dir: Path) -> dict[str, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     fragment = render_page(data)
@@ -181,5 +219,8 @@ def write_web(data: dict, out_dir: Path) -> dict[str, Path]:
     }
     paths["page"].write_text(standalone(fragment), encoding="utf-8")
     paths["fragment"].write_text(fragment, encoding="utf-8")
+    if "skills" in data:
+        paths["page_3d"] = out_dir / "roster-fit-3d.html"
+        paths["page_3d"].write_text(standalone(render_page(data_3d(data), "lab3d.html")), encoding="utf-8")
     paths["data"].write_text(json.dumps(data, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
     return paths

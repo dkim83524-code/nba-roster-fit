@@ -28,6 +28,9 @@ MPG = [35, 33, 31, 29, 26, 22, 18, 16, 15, 10, 8, 6, 4, 3]
 ROLES = {"creator": ("Shot Creator", "Point of Attack"), "scorer": ("Primary Ball Handler", "Chaser"),
          "wing3d": ("Movement Shooter", "Wing Stopper"), "big": ("Roll + Cut Big", "Anchor Big"),
          "connector": ("Connector", "Helper"), "bench": ("Stationary Shooter", "Low Activity")}
+# the 3D view's extra traits per archetype: (self-creation, perimeter defense, rim protection)
+SKILL_TRAITS = {"creator": (1.8, 0.2, -1.0), "scorer": (1.4, -0.2, -0.8), "wing3d": (-0.3, 1.5, -0.4),
+                "big": (-0.8, -0.6, 1.8), "connector": (0.0, 0.6, 0.0), "bench": (-0.5, -0.3, -0.3)}
 POSITIONS = {"creator": "PG", "scorer": "SG", "wing3d": "SF", "connector": "PF", "big": "C"}
 _FIRST = ["Avery", "Blake", "Cam", "Dev", "Eli", "Finn", "Gray", "Hayes", "Ira", "Jules", "Kai",
           "Lane", "Milo", "Noel", "Oak", "Parker", "Quinn", "Reese", "Sage", "Tate"]
@@ -70,6 +73,10 @@ def make_league(root: Path, seasons: list[str], n_teams: int = 30, games: int = 
                 })
                 pid += 1
         players = pd.DataFrame(rows_players)
+        # 3D-view traits and tables come from their own generator, so the rest of the league stays
+        # exactly as it was before they existed
+        srng = np.random.default_rng(seed * 7919 + s_idx)
+        st = np.vstack([np.array(SKILL_TRAITS[a]) for a in players["arche"]]) + srng.normal(0, 0.45, (len(players), 3))
         start = pd.Timestamp(f"{2000 + int(season[2:4])}-10-20")
 
         # regular-season game logs: one row per player per game played
@@ -93,6 +100,13 @@ def make_league(root: Path, seasons: list[str], n_teams: int = 30, games: int = 
                 "FG3A": fg3a, "FG3M": rng.binomial(fg3a, float(np.clip(0.35 + 0.02 * t[3], 0.2, 0.45))),
             }))
         gamelog = pd.concat(logs, ignore_index=True)
+        base_columns = list(gamelog.columns)
+        row = gamelog["PLAYER_ID"].map(dict(zip(players["PLAYER_ID"], range(len(players))))).to_numpy()
+        mins = gamelog["MIN"].to_numpy(dtype=float)
+        gamelog["FGM"] = np.round(gamelog["PTS"].to_numpy() * 0.38).astype(int)
+        gamelog["FTA"] = srng.poisson(np.clip(0.06 + 0.04 * st[row, 0], 0.005, None) * mins)
+        gamelog["STL"] = srng.poisson(np.clip(0.03 + 0.012 * st[row, 1], 0.003, None) * mins)
+        gamelog["BLK"] = srng.poisson(np.clip(0.02 + 0.018 * st[row, 2], 0.002, None) * mins)
         cache.write(gamelog, season, REGULAR, "gamelog")
 
         totals = gamelog.groupby("PLAYER_ID")["MIN"].sum()
@@ -112,7 +126,25 @@ def make_league(root: Path, seasons: list[str], n_teams: int = 30, games: int = 
                                   "CATCH_SHOOT_FG3M": (cs_att * cs_pct).round()}), season, REGULAR, "catch_shoot")
         cache.write(pd.DataFrame({"PLAYER_ID": players["PLAYER_ID"],
                                   "SCREEN_ASSISTS": (np.clip(0.03 + 0.03 * tr[:, 5], 0, None)
-                                                     * players["MIN"]).round()}), season, REGULAR, "hustle")
+                                                     * players["MIN"]).round(),
+                                  "DEFLECTIONS": (np.clip(0.05 + 0.02 * st[:, 1], 0.005, None)
+                                                  * players["MIN"]).round(),
+                                  "CONTESTED_SHOTS_3PT": (np.clip(0.06 + 0.02 * st[:, 1], 0.005, None)
+                                                          * players["MIN"]).round()}),
+                    season, REGULAR, "hustle")
+        cache.write(pd.DataFrame({"PLAYER_ID": players["PLAYER_ID"], "GP": 70,
+                                  "PCT_UAST_FGM": np.clip(0.35 + 0.15 * st[:, 0], 0.05, 0.95)}),
+                    season, REGULAR, "scoring")
+        cache.write(pd.DataFrame({"PLAYER_ID": players["PLAYER_ID"],
+                                  "DRIVES": (np.clip(0.15 + 0.12 * st[:, 0], 0.01, None) * players["MIN"]).round()}),
+                    season, REGULAR, "drives")
+        rim_att = (np.clip(0.1 + 0.12 * st[:, 2], 0.01, None) * players["MIN"]).round()
+        normal = 0.62 + srng.normal(0, 0.02, len(players))
+        allowed = np.clip(normal - 0.03 * st[:, 2] + srng.normal(0, 0.03, len(players)), 0.3, 0.9)
+        cache.write(pd.DataFrame({"CLOSE_DEF_PERSON_ID": players["PLAYER_ID"], "PLAYER_NAME": players["PLAYER_NAME"],
+                                  "D_FGA": rim_att, "D_FGM": (rim_att * allowed).round(),
+                                  "NORMAL_FG_PCT": normal.round(3)})[rim_att > 0],
+                    season, REGULAR, "rim_defense")
         mrows = []
         for p, v in zip(players.itertuples(), tr[:, 6]):
             spread = 1 / (1 + np.exp(-v))  # 0 = specialist, 1 = even
@@ -138,7 +170,7 @@ def make_league(root: Path, seasons: list[str], n_teams: int = 30, games: int = 
                     po.append((p.PLAYER_ID, p.PLAYER_NAME, p.TEAM_ID, team, f"{season}-po-{team}-{g}",
                                (po_start + pd.Timedelta(days=g)).strftime("%Y-%m-%d"),
                                float(np.clip(rng.normal(p.mpg * 1.08, 3), 1, 46)), 0, 0, 0, 0, 0))
-        cache.write(pd.DataFrame(po, columns=gamelog.columns), season, PLAYOFFS, "gamelog")
+        cache.write(pd.DataFrame(po, columns=base_columns), season, PLAYOFFS, "gamelog")
 
         # DARKO-style CSV, written the way a user would save it
         o = 0.9 * tr[:, 0] + players["quality"] + rng.normal(0, 0.4, len(players))

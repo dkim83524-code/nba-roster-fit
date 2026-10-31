@@ -113,6 +113,34 @@ portability:                         # value kept without the ball
   cs3_pct_prior_attempts: 50         # shrink 3P% toward league average by this many attempts
   versatility_min_partial_poss: 300  # fewer matchup possessions than this -> no versatility score
 
+skills:                              # the 3D view: six skills on three axes
+  # Each pair is one axis: its two ends are substitutes (being great at either fills the axis), and
+  # a shape's volume is the product of the three axis sums, so a player needs something on every
+  # axis. Each component is ranked among the season's qualified players; a skill is the weighted
+  # mean of its components, shown as a percentile. Shape size comes from overall impact (LEBRON +
+  # DARKO, offense plus defense): size = size_floor + (1 - size_floor) x impact percentile / 100.
+  enabled: true
+  pairs:                             # [one end, the opposite end]
+    - [creation, playmaking]
+    - [spacing, screening]
+    - [perimeter_defense, rim_protection]
+  labels:
+    creation: "Creates his shot"
+    playmaking: "Sets up others"
+    spacing: "Spaces the floor"
+    screening: "Screens & crashes"
+    perimeter_defense: "Perimeter D"
+    rim_protection: "Protects the rim"
+  axes:
+    creation: {unassisted_fgm_per100: 0.5, drives_per100: 0.3, fta_per100: 0.2}
+    playmaking: {potential_ast_per100: 0.5, ast_pts_created_per100: 0.5}
+    spacing: {three_volume: 0.7, three_accuracy: 0.3}          # same as "Fits next to stars"
+    screening: {oreb_pct: 0.5, screen_ast_per100: 0.5}
+    perimeter_defense: {stl_per100: 0.3, deflections_per100: 0.4, contested3_per100: 0.3}  # activity
+    rim_protection: {rim_points_saved_per100: 0.5, rim_contests_per100: 0.2, blk_per100: 0.3}
+  min_weight_present: 0.5
+  size_floor: 0.35
+
 team:
   on_court_slots: 5                  # minutes weights sum to 5; a 48-minute player counts 1.0
   capped_corners: [playmaking, portability]

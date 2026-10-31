@@ -62,7 +62,7 @@ def hosted_environment() -> str | None:
 
 
 def cmd_fetch(cfg: Config, args) -> int:
-    from .metrics.players import required_tables
+    from .metrics.players import download_tables
 
     hosted = hosted_environment()
     if hosted and not args.anyway:
@@ -74,7 +74,7 @@ def cmd_fetch(cfg: Config, args) -> int:
         return 2
     cache = _open_cache(cfg)
     fetcher = NBAStatsFetcher(cache, cfg.fetch.sleep_seconds, cfg.fetch.timeout, cfg.fetch.retries)
-    tables = args.tables.split(",") if args.tables else required_tables(cfg)
+    tables = args.tables.split(",") if args.tables else download_tables(cfg)
     for season in _seasons(cfg, args.seasons):
         for table in tables:
             for season_type in TABLES[table].season_types:
@@ -136,12 +136,16 @@ def _check_source(cfg: Config, league, seasons: list[str], name: str, rep, min_m
 
 
 def cmd_check(cfg: Config, args) -> int:
-    from .metrics.players import required_tables
+    from .metrics.players import required_tables, skill_tables
 
     cache = _open_cache(cfg)
     seasons = _seasons(cfg, args.seasons)
-    need = required_tables(cfg)
-    print(f"Required tables: {', '.join(need)}  (regular season and playoffs)")
+    core = required_tables(cfg)
+    extra = skill_tables(cfg)
+    need = core + extra
+    print(f"Required tables: {', '.join(core)}  (regular season and playoffs)")
+    if extra:
+        print(f"3D view only: {', '.join(extra)}  (optional: without them the 3D page has gaps; nothing else changes)")
     print(f"{'season':<9}" + "".join(f"{t:<13}" for t in need) + "playoffs     impact")
     league = build_league(cfg, cache, seasons)
     reports = league.impact_reports
@@ -233,10 +237,10 @@ def cmd_plot(cfg: Config, args) -> int:
 
 
 def cmd_browser_script(cfg: Config, args) -> int:
-    from .metrics.players import required_tables
+    from .metrics.players import download_tables
 
     cache = _open_cache(cfg)
-    tables = args.tables.split(",") if args.tables else required_tables(cfg)
+    tables = args.tables.split(",") if args.tables else download_tables(cfg)
     jobs = download_jobs(tables, _seasons(cfg, args.seasons), None if args.all else cache)
     if not jobs:
         print("Everything the config needs is already cached; nothing to download.")
@@ -375,6 +379,14 @@ def _add_cap_game(cfg: Config, args, data: dict) -> int:
     return 0
 
 
+def _skills_gaps(data: dict) -> list[str]:
+    """Skills with no values in the latest season (their tables aren't downloaded)."""
+    sk = data.get("skills") or {}
+    latest = data["meta"]["seasons"][-1]
+    have = set(sk.get("available", {}).get(latest, []))
+    return [sk["labels"][s] for s in sk.get("order", []) if s not in have]
+
+
 def cmd_export_web(cfg: Config, args) -> int:
     from .web import build_web_data, write_web
 
@@ -397,6 +409,12 @@ def cmd_export_web(cfg: Config, args) -> int:
     n_teams = sum(len(t) for t in data["teams"].values())
     print(f"{len(data['meta']['seasons'])} seasons, {n_teams} team-seasons")
     print(f"Wrote {paths['page']}   (open in a browser)")
+    if "page_3d" in paths:
+        print(f"      {paths['page_3d']}   (the 3D prototype)")
+        missing = _skills_gaps(data)
+        if missing:
+            print(f"      3D view: no {', '.join(missing)} yet; run `browser-script` to download "
+                  "the scoring, drives and rim_defense tables", file=sys.stderr)
     print(f"      {paths['data']}   (upload this to Claude to update the shared page)")
     return 0
 

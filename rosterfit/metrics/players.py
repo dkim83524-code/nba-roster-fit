@@ -15,6 +15,7 @@ from .playmaking import NEGATIVE as PM_NEGATIVE
 from .playmaking import playmaking_components
 from .pool import composite, parts_sum, percentile_against, qualified_mask, zscore
 from .portability import portability_components
+from .skills import SKILL_TABLES, skill_scores
 
 # Which cached table each weighted component depends on.
 _COMPONENT_TABLE = {
@@ -29,10 +30,24 @@ _COMPONENT_TABLE = {
 
 
 def required_tables(cfg: Config) -> list[str]:
+    """Tables the four-corner square needs; a season missing one is left out of the team pool."""
     needed = {"gamelog", "advanced"}
     for weights in (cfg.playmaking.weights, cfg.portability.component_weights()):
         needed |= {_COMPONENT_TABLE[k] for k, w in weights.items() if w > 0 and k in _COMPONENT_TABLE}
     return sorted(needed)
+
+
+def skill_tables(cfg: Config) -> list[str]:
+    """Extra tables only the 3D view uses. Optional: without them the 3D view has gaps, nothing else changes."""
+    if not cfg.skills.enabled:
+        return []
+    used = {c for weights in cfg.skills.axes.values() for c, w in weights.items() if w > 0}
+    return sorted({t for c, t in SKILL_TABLES.items() if c in used} - set(required_tables(cfg)))
+
+
+def download_tables(cfg: Config) -> list[str]:
+    """Everything to fetch or download: the square's tables plus the 3D view's."""
+    return sorted(set(required_tables(cfg)) | set(skill_tables(cfg)))
 
 
 @dataclass
@@ -45,6 +60,9 @@ class SeasonData:
     catch_shoot: pd.DataFrame | None = None
     hustle: pd.DataFrame | None = None
     matchups: pd.DataFrame | None = None
+    scoring: pd.DataFrame | None = None
+    drives: pd.DataFrame | None = None
+    rim_defense: pd.DataFrame | None = None
 
     @property
     def regular_season_end(self) -> pd.Timestamp | None:
@@ -66,6 +84,9 @@ def load_season(cache: Cache, season: str) -> SeasonData | None:
         catch_shoot=cache.read_or_none(season, REGULAR, "catch_shoot"),
         hustle=cache.read_or_none(season, REGULAR, "hustle"),
         matchups=cache.read_or_none(season, REGULAR, "matchups"),
+        scoring=cache.read_or_none(season, REGULAR, "scoring"),
+        drives=cache.read_or_none(season, REGULAR, "drives"),
+        rim_defense=cache.read_or_none(season, REGULAR, "rim_defense"),
     )
 
 
@@ -89,19 +110,21 @@ def minutes(series: pd.Series) -> pd.Series:
     return series.map(one).astype(float)
 
 
+# box-score columns the 3D view uses; added when the game log has them
+_OPTIONAL_BOX = ("FGM", "FTA", "STL", "BLK")
+
+
 def player_totals(gamelog: pd.DataFrame) -> pd.DataFrame:
     """Season totals per player across all their teams."""
     g = gamelog.assign(MIN=minutes(gamelog["MIN"]))
     g = g[g["MIN"] > 0]
+    sums = {c: (c, "sum") for c in ("AST", "PTS", "TOV", "FG3A", "FG3M")}
+    sums.update({c: (c, "sum") for c in _OPTIONAL_BOX if c in g.columns})
     agg = g.groupby("PLAYER_ID").agg(
         PLAYER_NAME=("PLAYER_NAME", "last"),
         GP=("MIN", "size"),
         MIN=("MIN", "sum"),
-        AST=("AST", "sum"),
-        PTS=("PTS", "sum"),
-        TOV=("TOV", "sum"),
-        FG3A=("FG3A", "sum"),
-        FG3M=("FG3M", "sum"),
+        **sums,
     ).reset_index()
     agg["MPG"] = agg["MIN"] / agg["GP"]
     return agg
@@ -155,6 +178,13 @@ def build_player_table(data: SeasonData, impact: dict[str, pd.DataFrame] | pd.Da
         players[f"{corner}_raw"] = values
         players[f"{corner}_z"] = zscore(values, pool)
         players[f"{corner}_pct"] = percentile_against(values, values[pool])
+    if cfg.skills.enabled:
+        skills = skill_scores(players, data, pm, port, cfg.skills, pool)
+        for col in skills.columns:
+            players[col] = skills[col]
+        # shape size in the 3D view: overall impact, offense z + defense z
+        impact = players["offense_z"] + players["defense_z"]
+        players["impact_pct"] = percentile_against(impact, impact[pool])
     for col in od.columns:
         if col not in ("offense", "defense"):
             players[col] = od[col]
