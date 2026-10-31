@@ -36,6 +36,10 @@ TABLES: dict[str, Table] = {
         Table("catch_shoot", "2013-14", (REGULAR, PLAYOFFS), "catch-and-shoot tracking: C&S 3PA / 3PM"),
         Table("hustle", "2016-17", (REGULAR, PLAYOFFS), "hustle stats: screen assists"),
         Table("matchups", "2017-18", (REGULAR, PLAYOFFS), "defensive matchup time by opponent position"),
+        # the 3D view's six skills
+        Table("scoring", "1996-97", (REGULAR, PLAYOFFS), "scoring breakdown: share of made shots unassisted"),
+        Table("drives", "2013-14", (REGULAR, PLAYOFFS), "drives tracking: drives to the basket"),
+        Table("rim_defense", "2013-14", (REGULAR, PLAYOFFS), "defense within 6 ft: shots defended, FG% vs normal"),
     )
 }
 
@@ -64,8 +68,18 @@ def request_spec(table: str, season: str, season_type: str,
         return ep.LeagueDashPlayerStats, dict(season=season, season_type_all_star=season_type,
                                               measure_type_detailed_defense="Advanced",
                                               per_mode_detailed="Totals")
-    if table in ("passing", "catch_shoot"):
-        measure = {"passing": "Passing", "catch_shoot": "CatchShoot"}[table]
+    if table == "scoring":
+        return ep.LeagueDashPlayerStats, dict(season=season, season_type_all_star=season_type,
+                                              measure_type_detailed_defense="Scoring",
+                                              per_mode_detailed="Totals")
+    if table == "rim_defense":
+        # NBA.com's own page sends 0, not blank, for these
+        return ep.LeagueDashPtDefend, dict(season=season, season_type_all_star=season_type,
+                                           defense_category="Less Than 6Ft", per_mode_simple="Totals",
+                                           last_n_games_nullable=0, month_nullable=0,
+                                           opponent_team_id_nullable=0, period_nullable=0)
+    if table in ("passing", "catch_shoot", "drives"):
+        measure = {"passing": "Passing", "catch_shoot": "CatchShoot", "drives": "Drives"}[table]
         return ep.LeagueDashPtStats, dict(season=season, season_type_all_star=season_type,
                                           pt_measure_type=measure, per_mode_simple="Totals",
                                           player_or_team="Player")

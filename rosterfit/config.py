@@ -131,6 +131,32 @@ class PortabilityCfg:
         return out
 
 
+SKILL_COMPONENTS = (
+    "unassisted_fgm_per100", "drives_per100", "fta_per100",            # creation
+    "potential_ast_per100", "ast_pts_created_per100",                   # playmaking
+    "three_volume", "three_accuracy",                                   # spacing
+    "oreb_pct", "screen_ast_per100",                                    # screening
+    "stl_per100", "deflections_per100", "contested3_per100",           # perimeter defense
+    "rim_points_saved_per100", "rim_contests_per100", "blk_per100",    # rim protection
+)
+
+
+@dataclass
+class SkillsCfg:
+    """The 3D view: six skills on three axes. Each axis's two ends are substitutes (either one fills
+    it); the three axes are complements (a shape's volume is the product of the three axis sums)."""
+    enabled: bool = True
+    pairs: list[list[str]] = field(default_factory=list)       # three [end, opposite end] pairs
+    labels: dict[str, str] = field(default_factory=dict)
+    axes: dict[str, dict[str, float]] = field(default_factory=dict)  # skill -> component weights
+    min_weight_present: float = 0.5
+    size_floor: float = 0.35          # shape size at the 0th impact percentile; 1.0 at the 100th
+
+    @property
+    def order(self) -> list[str]:
+        return [skill for pair in self.pairs for skill in pair]
+
+
 @dataclass
 class TeamCfg:
     on_court_slots: int = 5
@@ -178,6 +204,7 @@ class Config:
     impact: ImpactCfg = field(default_factory=ImpactCfg)
     playmaking: PlaymakingCfg = field(default_factory=PlaymakingCfg)
     portability: PortabilityCfg = field(default_factory=PortabilityCfg)
+    skills: SkillsCfg = field(default_factory=SkillsCfg)
     team: TeamCfg = field(default_factory=TeamCfg)
     playoffs: PlayoffsCfg = field(default_factory=PlayoffsCfg)
     drawing: DrawingCfg = field(default_factory=DrawingCfg)
@@ -269,6 +296,20 @@ def validate(cfg: Config) -> None:
                                  f"known: {list(PORTABILITY_COMPONENTS)}")
             if part.weight < 0 or any(w < 0 for w in part.components.values()):
                 raise ValueError(f"portability.parts.{name}: weights must be >= 0")
+    sk = cfg.skills
+    if sk.enabled:
+        if len(sk.pairs) != 3 or any(len(p) != 2 for p in sk.pairs) or len(set(sk.order)) != 6:
+            raise ValueError("skills.pairs must be three pairs of two different skills")
+        for skill in sk.order:
+            weights = sk.axes.get(skill)
+            if not weights or sum(weights.values()) <= 0 or any(w < 0 for w in weights.values()):
+                raise ValueError(f"skills.axes.{skill} needs component weights >= 0 with at least one > 0")
+            unknown = set(weights) - set(SKILL_COMPONENTS)
+            if unknown:
+                raise ValueError(f"skills.axes.{skill}: unknown component(s) {sorted(unknown)}; "
+                                 f"known: {list(SKILL_COMPONENTS)}")
+        if not 0 <= sk.size_floor <= 1:
+            raise ValueError("skills.size_floor must be between 0 and 1")
     if port.catch_shoot_weight < 1:
         raise ValueError("portability.catch_shoot_weight must be >= 1")
     for section in (cfg.playmaking, cfg.portability):

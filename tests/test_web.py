@@ -167,3 +167,67 @@ def test_daily_deal_is_the_same_for_everyone(tmp_path):
     assert out["a"] != out["c"]
     assert out["afford"] == [True, False]
     assert out["floor"] == [3, 7]  # 2 teams have someone at or under 3; with too few teams, the priciest minimum
+
+
+_NODE_3D = """
+const RF = require(process.argv[2]);
+const data = JSON.parse(require("fs").readFileSync(process.argv[3], "utf8"));
+const dirs = RF.sphereDirections(4000);
+const one = [0.9, 0.2, 0.5, 0.7, 0.3, 0.6];
+const sk = RF.skillIndex(data);
+const season = data.meta.seasons[data.meta.seasons.length - 1];
+const entries = data.teams[season].DEM.regular.map(([pid, min]) => ({ pid, min, ...sk[season].get(pid) }));
+const team = RF.evaluate3d(entries, { scale: "percentile", n: data.meta.qualified[season],
+  sizeFloor: data.skills.size_floor, minutes: true, minMinutes: data.meta.min_minutes_to_draw, dirs });
+console.log(JSON.stringify({
+  unit: RF.unionVolumeShare([[1, 1, 1, 1, 1, 1]], dirs),
+  single: RF.unionVolumeShare([one], dirs), singleExact: RF.octaVolumeShare(one),
+  nested: RF.unionVolumeShare([one, one.map((v) => v / 2)], dirs),
+  team: { coverage: team.coverage, sum: team.sumVolumes, best: team.best,
+          shapes: team.players.filter((p) => p.drawn).map((p) => p.r) },
+}));
+"""
+
+
+def test_3d_export(data, cfg, tmp_path):
+    sk = data["skills"]
+    assert sk["order"] == cfg.skills.order and len(sk["pairs"]) == 3
+    for season in data["meta"]["seasons"]:
+        assert sk["available"][season] == cfg.skills.order
+        rows = sk["players"][season]
+        assert len(rows) == len(data["players"][season]) and all(len(r) == 8 for r in rows)
+    json.dumps(sk, allow_nan=False)
+    paths = write_web(data, tmp_path)
+    page = paths["page_3d"].read_text()
+    assert page.startswith("<!doctype html>") and "evaluate3d" in page and '"pools"' not in page
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js not installed")
+def test_3d_volume_math(data, tmp_path):
+    import numpy as np
+
+    script = tmp_path / "vol.js"
+    script.write_text(_NODE_3D)
+    data_path = tmp_path / "data.json"
+    data_path.write_text(json.dumps(data))
+    run = subprocess.run(["node", str(script), str(HERE / "core.js"), str(data_path)],
+                         capture_output=True, text=True, check=True)
+    js = json.loads(run.stdout)
+    assert js["unit"] == pytest.approx(1.0, abs=1e-3)                  # the full shape is 100%
+    assert js["single"] == pytest.approx(js["singleExact"], abs=1e-3)  # (a+b)(c+d)(e+f)/8
+    assert js["nested"] == pytest.approx(js["single"], abs=1e-9)       # a shape inside another adds nothing
+
+    # the team's union volume, checked independently: random points in the cube [-1, 1]^3 (8 units),
+    # inside a shape when |x|/X + |y|/Y + |z|/Z <= 1 with that octant's radii; the full shape is 4/3
+    team = js["team"]
+    shapes = np.array(team["shapes"])
+    assert len(shapes) >= 5
+    pts = np.random.default_rng(0).uniform(-1, 1, (200_000, 3))
+    inside = np.zeros(len(pts), dtype=bool)
+    for r in shapes:
+        radii = np.where(pts >= 0, r[[0, 2, 4]], r[[1, 3, 5]])
+        inside |= (np.abs(pts) / radii).sum(axis=1) <= 1
+    assert team["coverage"] == pytest.approx(inside.mean() * 8 / (4 / 3), abs=3e-3)
+    assert team["coverage"] <= team["sum"] + 1e-9
+    for i, b in enumerate(team["best"]):
+        assert b["value"] == pytest.approx(shapes[:, i].max())

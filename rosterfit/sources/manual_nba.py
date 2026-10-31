@@ -24,14 +24,17 @@ from ..seasons import PLAYOFFS, REGULAR, start_year
 from .nba_stats import TABLES, available, request_spec, team_ids
 
 BASE_URL = "https://stats.nba.com/stats/"
-_FILE_HINT = re.compile(r"(gamelog|advanced|passing|catch_shoot|hustle|matchups)[_-](\d{4}-\d{2})([_-]playoffs)?",
+_FILE_HINT = re.compile(r"(gamelog|advanced|passing|catch_shoot|hustle|matchups|scoring|drives|rim_defense)"
+                        r"[_-](\d{4}-\d{2})([_-]playoffs)?",
                         re.IGNORECASE)
 # Counting columns we use, per table; per-game downloads are multiplied back up to season totals.
 _COUNT_COLUMNS = {
     "advanced": ["POSS"],
     "passing": ["POTENTIAL_AST", "AST_PTS_CREATED", "AST_POINTS_CREATED"],
     "catch_shoot": ["CATCH_SHOOT_FG3A", "CATCH_SHOOT_FG3M"],
-    "hustle": ["SCREEN_ASSISTS"],
+    "hustle": ["SCREEN_ASSISTS", "DEFLECTIONS", "CONTESTED_SHOTS_3PT", "LOOSE_BALLS_RECOVERED"],
+    "drives": ["DRIVES"],
+    "rim_defense": ["D_FGM", "D_FGA"],
     "matchups": ["PARTIAL_POSS"],
 }
 
@@ -182,10 +185,12 @@ def identify(resp: dict, filename: str = "") -> tuple[str, str, str, str]:
     table = None
     if resource == "leaguegamelog" and str(p.get("PlayerOrTeam", "P")).upper().startswith("P"):
         table = "gamelog"
-    elif resource == "leaguedashplayerstats" and p.get("MeasureType") == "Advanced":
-        table = "advanced"
+    elif resource == "leaguedashplayerstats" and p.get("MeasureType") in ("Advanced", "Scoring"):
+        table = str(p.get("MeasureType")).lower()
     elif resource == "leaguedashptstats" and str(p.get("PlayerOrTeam", "Player")).lower().startswith("p"):
-        table = {"Passing": "passing", "CatchShoot": "catch_shoot"}.get(p.get("PtMeasureType"))
+        table = {"Passing": "passing", "CatchShoot": "catch_shoot", "Drives": "drives"}.get(p.get("PtMeasureType"))
+    elif resource == "leaguedashptdefend" and p.get("DefenseCategory") == "Less Than 6Ft":
+        table = "rim_defense"
     elif resource == "leaguehustlestatsplayer":
         table = "hustle"
     elif resource == "matchupsrollup":
