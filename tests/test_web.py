@@ -200,6 +200,10 @@ def test_3d_export(data, cfg, tmp_path):
     paths = write_web(data, tmp_path)
     page = paths["page_3d"].read_text()
     assert page.startswith("<!doctype html>") and "evaluate3d" in page and '"pools"' not in page
+    from rosterfit.web import data_3d
+    assert set(data_3d({**data, "game": {"deck": []}})) == {"meta", "players", "teams", "skills", "game"}
+    for tab in ("teams", "compare", "builder", "game"):
+        assert f'id="view-{tab}"' in page
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js not installed")

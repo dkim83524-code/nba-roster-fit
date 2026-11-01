@@ -420,7 +420,8 @@
     return out;
   }
 
-  /* Score a group of players in 3D. entries: [{pid, min, pct: [6], impact}].
+  /* Score a group of players in 3D. entries: [{pid, min, pct: [6], impact, n?}] (n: that player's
+   * season's qualified players, when players come from different seasons).
    * opts: {scale, n (qualified players, for the rank scale), sizeFloor, minutes (true: size also
    * by minutes), minMinutes (draw only players with this many), dirs}.
    * Size = sizeFloor + (1 - sizeFloor) x impact percentile / 100 (x (min / most minutes)^(1/3) with
@@ -443,7 +444,7 @@
       }
       const byMinutes = opts.minutes && ref > 0 ? Math.cbrt(Math.max(p.min, 0) / ref) : 1;
       p.size = (floor + (1 - floor) * p.impact / 100) * byMinutes;
-      p.r = p.pct.map((v) => p.size * radius(v, opts.n, opts.scale));
+      p.r = p.pct.map((v) => p.size * radius(v, p.n != null ? p.n : opts.n, opts.scale));
       p.volume = octaVolumeShare(p.r);
       sumVolumes += p.volume;
       shapes.push(p.r);
@@ -453,7 +454,7 @@
     const best = AXIS_DIRS.map((_, i) => {
       let top = null;
       for (const p of drawn) if (!top || p.r[i] > top.r[i]) top = p;
-      return top ? { pid: top.pid, value: top.r[i] } : null;
+      return top ? { pid: top.pid, key: top.key, value: top.r[i] } : null;
     });
     return { players, coverage, sumVolumes, overlap: Math.max(sumVolumes - coverage, 0), best };
   }

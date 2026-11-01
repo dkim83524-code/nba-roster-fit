@@ -205,8 +205,8 @@ def standalone(fragment: str) -> str:
 
 
 def data_3d(data: dict) -> dict:
-    """What the 3D page needs (no team pools, caps or cap game)."""
-    return {k: data[k] for k in ("meta", "players", "teams", "skills") if k in data}
+    """What the 3D page needs: no 2D team pools or caps."""
+    return {k: data[k] for k in ("meta", "players", "teams", "skills", "game") if k in data}
 
 
 def write_web(data: dict, out_dir: Path) -> dict[str, Path]:
