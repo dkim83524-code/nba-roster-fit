@@ -407,20 +407,61 @@
     return (Math.PI * total) / dirs.length;
   }
 
-  /* data.skills.players[season] rows -> {season: Map(pid -> {pct: [6], impact})}. */
+  /* Inverse of the standard normal CDF (Acklam's rational approximation, error < 1.2e-9). */
+  function invNormal(p) {
+    const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239];
+    const b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572];
+    const c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+    const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+    const tail = (q) => (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+    if (p < 0.02425) return tail(Math.sqrt(-2 * Math.log(p)));
+    if (p > 1 - 0.02425) return -tail(Math.sqrt(-2 * Math.log(1 - p)));
+    const q = p - 0.5;
+    const r = q * q;
+    return ((((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q) / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+  }
+
+  /* A team's six skill values, the 3D twin of the 2D corner sums for skills: minutes weights that
+   * sum to 5 (or opts.fixedWeight each, for a lineup), times each player's skill as a rank-based z
+   * (from his percentile among n players); below average counts 0, since a player who can't do
+   * something doesn't take it away from teammates who can. A missing skill counts 0.
+   * entries: [{min, pct: [6], n?}]. */
+  function teamSkillValues(entries, opts) {
+    const o = opts || {};
+    const total = entries.reduce((s, e) => s + e.min, 0);
+    const out = [0, 0, 0, 0, 0, 0];
+    for (const e of entries) {
+      if (!e.pct) continue;
+      const w = o.fixedWeight != null ? o.fixedWeight : total > 0 ? e.min / (total / 5) : 0;
+      const n = e.n || o.n || 1;
+      e.pct.forEach((v, i) => {
+        if (v == null) return;
+        const p = Math.min(Math.max(v / 100 - 0.5 / n, 0.5 / n), 1 - 0.5 / n);  // mid-rank share
+        out[i] += w * Math.max(invNormal(p), 0);
+      });
+    }
+    return out;
+  }
+
+  /* data.skills.players[season] rows -> {season: Map(pid -> {pct: [6], impact, parts})}; parts:
+   * component name -> percentile, when the export has them (component_pct). */
   function skillIndex(data) {
     const out = {};
     const sk = data.skills;
     if (!sk) return out;
+    const names = sk.component_list || [];
     for (const s of Object.keys(sk.players)) {
+      const parts = new Map();
+      for (const r of (sk.component_pct || {})[s] || []) parts.set(r[0], Object.fromEntries(names.map((c, i) => [c, r[i + 1]])));
       const map = new Map();
-      for (const r of sk.players[s]) map.set(r[0], { pct: r.slice(1, 7), impact: r[7] });
+      for (const r of sk.players[s]) map.set(r[0], { pct: r.slice(1, 7), impact: r[7], parts: parts.get(r[0]) || null });
       out[s] = map;
     }
     return out;
   }
 
-  /* Score a group of players in 3D. entries: [{pid, min, pct: [6], impact}].
+  /* Score a group of players in 3D. entries: [{pid, min, pct: [6], impact, n?}] (n: that player's
+   * season's qualified players, when players come from different seasons).
    * opts: {scale, n (qualified players, for the rank scale), sizeFloor, minutes (true: size also
    * by minutes), minMinutes (draw only players with this many), dirs}.
    * Size = sizeFloor + (1 - sizeFloor) x impact percentile / 100 (x (min / most minutes)^(1/3) with
@@ -443,7 +484,7 @@
       }
       const byMinutes = opts.minutes && ref > 0 ? Math.cbrt(Math.max(p.min, 0) / ref) : 1;
       p.size = (floor + (1 - floor) * p.impact / 100) * byMinutes;
-      p.r = p.pct.map((v) => p.size * radius(v, opts.n, opts.scale));
+      p.r = p.pct.map((v) => p.size * radius(v, p.n != null ? p.n : opts.n, opts.scale));
       p.volume = octaVolumeShare(p.r);
       sumVolumes += p.volume;
       shapes.push(p.r);
@@ -453,7 +494,7 @@
     const best = AXIS_DIRS.map((_, i) => {
       let top = null;
       for (const p of drawn) if (!top || p.r[i] > top.r[i]) top = p;
-      return top ? { pid: top.pid, value: top.r[i] } : null;
+      return top ? { pid: top.pid, key: top.key, value: top.r[i] } : null;
     });
     return { players, coverage, sumVolumes, overlap: Math.max(sumVolumes - coverage, 0), best };
   }
@@ -463,6 +504,7 @@
     teamContext, evaluateTeam, evaluateLineup, assignColors, placeLabels,
     seededRandom, hashSeed, dealOrder, signingFloor, canAfford,
     AXIS_DIRS, OCTA_FACES, octaVolumeShare, octaRadius, sphereDirections, unionVolumeShare, skillIndex, evaluate3d,
+    invNormal, teamSkillValues,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.RosterFitCore = api;

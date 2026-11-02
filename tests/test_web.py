@@ -192,14 +192,22 @@ console.log(JSON.stringify({
 def test_3d_export(data, cfg, tmp_path):
     sk = data["skills"]
     assert sk["order"] == cfg.skills.order and len(sk["pairs"]) == 3
+    assert "matchup_difficulty" in sk["component_list"] and "blk_per100" in sk["component_list"]
     for season in data["meta"]["seasons"]:
         assert sk["available"][season] == cfg.skills.order
         rows = sk["players"][season]
         assert len(rows) == len(data["players"][season]) and all(len(r) == 8 for r in rows)
+        parts = sk["component_pct"][season]
+        assert len(parts) == len(rows) and all(len(r) == 1 + len(sk["component_list"]) for r in parts)
+        assert all(v is None or 0 <= v <= 100 for r in parts for v in r[1:])
     json.dumps(sk, allow_nan=False)
     paths = write_web(data, tmp_path)
     page = paths["page_3d"].read_text()
     assert page.startswith("<!doctype html>") and "evaluate3d" in page and '"pools"' not in page
+    from rosterfit.web import data_3d
+    assert set(data_3d({**data, "game": {"deck": []}})) == {"meta", "players", "teams", "skills", "game"}
+    for tab in ("teams", "compare", "builder", "game"):
+        assert f'id="view-{tab}"' in page
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js not installed")
@@ -231,3 +239,28 @@ def test_3d_volume_math(data, tmp_path):
     assert team["coverage"] <= team["sum"] + 1e-9
     for i, b in enumerate(team["best"]):
         assert b["value"] == pytest.approx(shapes[:, i].max())
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js not installed")
+def test_team_shape_values():
+    """The 3D team shape's sums: minutes weights adding to 5, rank-based z, below average = 0."""
+    from statistics import NormalDist
+
+    script = """
+const RF = require(process.argv[1]);
+const ps = [0.001, 0.01, 0.2, 0.5, 0.7, 0.975, 0.9999];
+const team = RF.teamSkillValues([{ min: 30, pct: [99, 50, 10, null, 84, 0], n: 300 },
+                                 { min: 10, pct: [50, 50, 50, 50, 90, 50], n: 300 }]);
+const lineup = RF.teamSkillValues([{ min: 1, pct: [90, 0, 0, 0, 0, 0], n: 300 }], { fixedWeight: 1 });
+console.log(JSON.stringify({ inv: ps.map(RF.invNormal), ps, team, lineup }));
+"""
+    run = subprocess.run(["node", "-e", script, str(HERE / "core.js")], capture_output=True, text=True, check=True)
+    js = json.loads(run.stdout)
+    for p, z in zip(js["ps"], js["inv"]):
+        assert z == pytest.approx(NormalDist().inv_cdf(p), abs=1e-6)
+    z = lambda pct: max(NormalDist().inv_cdf(pct / 100 - 0.5 / 300), 0)  # noqa: E731
+    w1, w2 = 30 / (40 / 5), 10 / (40 / 5)
+    assert js["team"][0] == pytest.approx(w1 * z(99))
+    assert js["team"][1] == 0 and js["team"][3] == 0       # average and missing count 0, not less
+    assert js["team"][4] == pytest.approx(w1 * z(84) + w2 * z(90))
+    assert js["lineup"][0] == pytest.approx(z(90))

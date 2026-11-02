@@ -4,9 +4,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
 <style>
-/* Layout: the Roster Fit Lab workbench, one tool: the turning shape (left) and its numbers (right),
-   stacking on phones. Same gym-wall neutrals and ball-orange accent; player colors are the Lab's
-   validated chart palette, so a player keeps his color across both pages. */
+/* Layout: the Roster Fit Lab workbench in 3D: the same four tools (Teams, Compare, Builder, Cap
+   game), each a turning shape beside its numbers, stacking on phones. Same gym-wall neutrals and
+   ball-orange accent; player colors are the Lab's validated chart palette. Every 3D view shares
+   one camera, so turning one turns them all (Compare's two shapes stay at the same angle). */
 :root {
   --bg: #eef1ed;
   --surface: #ffffff;
@@ -49,34 +50,54 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-body); 
 .app { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 32px; }
 h1, h2, h3 { font-family: var(--font-display); font-weight: 700; letter-spacing: .01em; text-wrap: balance; margin: 0; }
-button, select { font: inherit; color: inherit; }
+button, select, input { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* top bar */
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding-block: 18px 14px; border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand svg { width: 30px; height: 30px; }
 .brand h1 { font-size: 28px; line-height: 1; }
 .brand small { display: block; font: 500 12px var(--font-body); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; margin-top: 3px; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.tab { background: none; border: 0; border-bottom: 3px solid transparent; padding: 8px 12px 6px; cursor: pointer;
+  font: 600 18px var(--font-display); letter-spacing: .03em; color: var(--ink-2); }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+@media (max-width: 480px) { .top { gap: 8px 20px; } .tabs { flex-wrap: nowrap; gap: 0; max-width: 100%; overflow-x: auto; } .tab { padding: 6px 8px 5px; font-size: 16.5px; white-space: nowrap; } }
 .scale-switch { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .scale-switch > span { font: 600 12px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 @media (max-width: 480px) { .scale-switch { margin-left: 0; } }
 .notice { margin: 12px 0 0; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: 14px; max-width: 80ch; }
 
+/* controls */
 .view { padding-top: 18px; }
 .controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; margin-bottom: 16px; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.field > span { font: 600 12px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.field > span, .pick legend { font: 600 12px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .field.grow { flex: 1 1 220px; }
-select { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; max-width: 100%; }
+select, input[type="search"] { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; max-width: 100%; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
 .seg-btn { border: 0; background: none; padding: 8px 12px; cursor: pointer; color: var(--ink-2); }
 .scale-switch .seg-btn { padding: 6px 11px; }
 .seg-btn[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
 .seg-btn:disabled { opacity: .45; cursor: not-allowed; }
+.pick { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px 12px; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; min-width: 0; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--ink-2); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.check { display: inline-flex; align-items: center; gap: 6px; padding-bottom: 8px; color: var(--ink-2); cursor: pointer; }
+.check input { accent-color: var(--accent); }
+.muted { color: var(--muted); }
 
+/* stage + panel */
 .split { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); gap: 20px; align-items: start; }
-@media (max-width: 880px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 880px) { .split, .duo { grid-template-columns: minmax(0, 1fr); } }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 14px 10px; min-width: 0; }
+figure.card { margin: 0; }
 .chart-title { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 4px; }
 .chart-title h2 { font-size: 24px; }
 .chart-title span { color: var(--muted); font-size: 13px; }
@@ -104,7 +125,8 @@ canvas.stage.dragging { cursor: grabbing; }
 .bar-row .lab { min-width: 0; line-height: 1.2; }
 .bar-row .lab b { display: block; font-weight: 600; font-size: 14px; }
 .bar-row .lab span { display: block; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bar-track { height: 10px; background: var(--grid); border-radius: 5px; overflow: hidden; }
+.bar-track { position: relative; height: 10px; background: var(--grid); border-radius: 5px; overflow: hidden; }
+.bar-tick { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: var(--ink); border-radius: 1px; }
 .bar-fill { display: block; height: 100%; background: var(--c, var(--ink)); border-radius: 5px; }
 .bar-fill.o { background: var(--other); }
 .bar-val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
@@ -112,22 +134,134 @@ canvas.stage.dragging { cursor: grabbing; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 th, td { padding: 6px 6px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-th:first-child, td:first-child { padding-left: 10px; }
+th:first-child, td:first-child { padding-left: 10px; text-align: left; }
 th:last-child, td:last-child { padding-right: 10px; }
-th:first-child, td:first-child { text-align: left; }
 thead th { font: 600 11.5px var(--font-body); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
-tbody tr { border-top: 1px solid var(--grid); cursor: pointer; }
-tbody tr:hover { background: var(--surface-2); }
-tbody tr.is-focus { background: var(--accent-soft); }
-tbody tr.undrawn { cursor: default; }
-tbody tr.undrawn td { color: var(--muted); }
-td .pos { color: var(--muted); font-size: 12px; margin-left: 4px; }
-td.hi { font-weight: 700; }
+tbody tr { border-top: 1px solid var(--grid); }
+td.lead { font-weight: 700; }
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--other)); margin-right: 8px; }
 .c1 { --c: var(--s1); } .c2 { --c: var(--s2); } .c3 { --c: var(--s3); } .c4 { --c: var(--s4); }
 .c5 { --c: var(--s5); } .c6 { --c: var(--s6); } .c7 { --c: var(--s7); } .c8 { --c: var(--s8); }
 @media (max-width: 480px) { table { font-size: 13px; } th, td { padding: 6px 4px; } thead th { font-size: 10.5px; letter-spacing: .02em; } .swatch { margin-right: 5px; } }
 
+/* players list: beside the stage on Teams (spanning both rows), under it on Builder and the game */
+.trio { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); grid-template-areas: "stage players" "numbers players"; gap: 20px; align-items: start; }
+.trio > .a-stage { grid-area: stage; }
+.trio > .a-players { grid-area: players; }
+.trio > .a-numbers { grid-area: numbers; }
+@media (max-width: 880px) { .trio { grid-template-columns: minmax(0, 1fr); grid-template-areas: "stage" "players" "numbers"; } }
+.plist { padding: 12px 6px 6px; }
+.plist-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 8px; padding: 0 8px 6px; }
+.plist-head h3 { font-size: 20px; }
+.plist-head span { font-size: 12.5px; color: var(--muted); }
+.plist-empty { margin: 0; padding: 4px 8px 10px; color: var(--muted); font-size: 14px; }
+.prow-cols, .prow-btn { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 2.6em 14px; align-items: center; gap: 10px; padding: 7px 8px; }
+.prow-cols { padding-block: 2px 4px; font: 600 11px var(--font-body); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.prow-cols span:nth-child(4) { text-align: right; }
+.prows { list-style: none; margin: 0; padding: 0; }
+.prow { border-top: 1px solid var(--grid); }
+.prow-btn { width: 100%; border: 0; background: none; cursor: pointer; text-align: left; border-radius: 8px; }
+.prow-btn:hover { background: var(--surface-2); }
+.prow.open > .prow-btn { background: var(--accent-soft); }
+.prow.undrawn .pname b { color: var(--muted); font-weight: 500; }
+.pname { min-width: 0; line-height: 1.25; }
+.pname b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pname span { display: block; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pmini { display: flex; align-items: flex-end; gap: 2px; height: 20px; }
+.pmini i { display: block; width: 5px; min-height: 2px; background: var(--c, var(--other)); border-radius: 1px; }
+.pmini i.axis { margin-left: 4px; }
+.pimpact { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.chev { color: var(--muted); font-size: 12px; text-align: center; transition: transform .15s; }
+.prow.open .chev { transform: rotate(180deg); }
+.pdetail { padding: 6px 10px 14px 30px; display: grid; gap: 10px; }
+.pline { margin: 0; font-size: 13px; color: var(--ink-2); }
+.pfacts { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--ink-2); }
+.pfacts b { font: 700 19px/1 var(--font-display); color: var(--ink); margin-right: 4px; font-variant-numeric: tabular-nums; }
+.paxis { display: grid; gap: 8px; padding-top: 8px; border-top: 1px dashed var(--grid); }
+.psk-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; }
+.psk-top b { font-weight: 600; }
+.psk-top span { font-weight: 700; font-variant-numeric: tabular-nums; }
+.psk .bar-track { height: 8px; margin-top: 3px; }
+.psk-parts { margin-top: 3px; font-size: 12px; color: var(--muted); }
+.pnote { margin: 0; font-size: 12px; color: var(--muted); }
+@media (max-width: 480px) { .prow-cols, .prow-btn { gap: 8px; padding-inline: 4px; } .pdetail { padding-left: 14px; } }
+@media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
+
+/* compare */
+.versus { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; align-items: start; }
+@media (max-width: 880px) { .versus { grid-template-columns: minmax(0, 1fr); } }
+.dumbbells { display: grid; gap: 12px; }
+.dumb-head { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.dumb-head b { font-weight: 600; }
+.dumb-head span { color: var(--ink-2); text-align: right; }
+.dumb-track { position: relative; height: 14px; margin-top: 4px; }
+.dumb-track::before { content: ""; position: absolute; left: 0; right: 0; top: 6px; height: 2px; background: var(--grid); }
+.dumb-span { position: absolute; top: 5px; height: 4px; background: var(--ink-2); border-radius: 2px; }
+.dumb-dot { position: absolute; top: 0; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; border: 2px solid var(--ink); background: var(--ink); }
+.dumb-dot.b { background: var(--surface); }
+.legend-ab { display: flex; gap: 14px; font-size: 13px; color: var(--ink-2); }
+.legend-ab i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink); margin-right: 5px; vertical-align: -1px; }
+.legend-ab i.a { background: var(--ink); }
+
+/* builder */
+.builder-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.slots { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.slot { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.slot.empty { border-style: dashed; color: var(--muted); background: transparent; }
+.slot .who { min-width: 0; }
+.slot .who b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot .who span { font-size: 12.5px; color: var(--muted); }
+.slot .x { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 4px 6px; border-radius: 6px; }
+.slot .x:hover { color: var(--ink); background: var(--surface-2); }
+.results { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 320px; overflow-y: auto; }
+.result { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; }
+.result:hover { border-color: var(--line); background: var(--surface); }
+.result .meta { font-size: 12.5px; color: var(--muted); }
+
+/* cap game */
+.game-rules { margin: 0 0 8px; max-width: 62ch; font-size: 14px; }
+.budget-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.budget-head b { font: 700 32px/1 var(--font-display); }
+.budget-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--grid); margin: 10px 0 8px; }
+.budget-bar span { display: block; height: 100%; background: var(--c); }
+.budget-bar span + span { box-shadow: inset 2px 0 0 var(--surface); }
+.budget-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 13.5px; color: var(--ink-2); }
+.pips i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--accent); margin-left: 4px; vertical-align: 0; }
+.pips i.on { background: var(--accent); }
+.pos-strip { list-style: none; margin: 12px 0 2px; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.pos-strip li { border: 1px solid var(--line); border-radius: 8px; padding: 5px 7px; min-width: 0; font-size: 12.5px; }
+.pos-strip b { display: block; font: 700 14px var(--font-display); letter-spacing: .04em; }
+.pos-strip span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.pos-strip li.open span { color: var(--muted); }
+.pos-strip li.filled b::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 5px; vertical-align: 1px; }
+.deal-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 8px 12px; margin-bottom: 8px; }
+.deal-head h2 { font-size: 30px; line-height: 1.05; }
+.cands { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.cand { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 6px 6px; border-radius: 10px; border: 1px solid transparent; }
+.cand:hover { border-color: var(--line); background: var(--surface-2); }
+.cand.over, .cand.taken { opacity: .45; }
+.pos-badge { display: inline-block; min-width: 2.2em; text-align: center; font: 700 12px/1.5 var(--font-display); letter-spacing: .04em; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-right: 6px; color: var(--ink-2); vertical-align: 1px; }
+.cand .who { min-width: 0; }
+.cand .who b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cand .meta { font-size: 12.5px; color: var(--muted); }
+.cand .price { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cand .price b { font-weight: 600; }
+.cand .gain { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+canvas.glyph { display: block; width: 48px; height: 48px; }
+.final { font: 700 76px/1 var(--font-display); margin-top: 4px; }
+.share-text { width: 100%; min-height: 96px; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--surface-2); font: 13px/1.4 var(--font-body); resize: vertical; }
+.game-foot { margin: 16px 0 0; font-size: 13px; }
+.game-foot a { color: inherit; }
+@media (max-width: 560px) {
+  .cand { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 4px 10px; padding: 8px 2px; }
+  .cand .glyph { width: 40px; height: 40px; grid-row: 1 / span 2; align-self: start; }
+  .cand .who { grid-column: 2 / 4; }
+  .cand .price { grid-column: 2; text-align: left; }
+  .cand .gain { display: inline; margin-left: 6px; }
+  .cand .btn { grid-column: 3; padding: 6px 12px; }
+}
+
+/* footer */
 .foot { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 10px; font-size: 13.5px; color: var(--ink-2); }
 .foot details { max-width: 76ch; }
 .foot summary { cursor: pointer; font-weight: 600; color: var(--ink); }
@@ -144,6 +278,12 @@ td.hi { font-weight: 700; }
       <svg viewBox="-12 -12 24 24" aria-hidden="true"><polygon points="0,-10 9,0 0,10 -9,0" fill="none" stroke="currentColor" stroke-width="1.5"/><polygon points="0,-10 3,1 0,10 -9,0" fill="var(--accent)" fill-opacity=".35" stroke="var(--accent)" stroke-width="1.2"/><line x1="-9" y1="0" x2="9" y2="0" stroke="currentColor" stroke-width=".8" stroke-dasharray="1.5 1.5"/></svg>
       <div><h1>Roster Fit 3D</h1><small id="brand-sub">Prototype</small></div>
     </div>
+    <nav class="tabs" role="tablist" aria-label="Tools">
+      <button class="tab" role="tab" id="tab-teams" aria-controls="view-teams" aria-selected="true">Teams</button>
+      <button class="tab" role="tab" id="tab-compare" aria-controls="view-compare" aria-selected="false">Compare</button>
+      <button class="tab" role="tab" id="tab-builder" aria-controls="view-builder" aria-selected="false">Builder</button>
+      <button class="tab" role="tab" id="tab-game" aria-controls="view-game" aria-selected="false" hidden>Cap game</button>
+    </nav>
     <div class="scale-switch">
       <span id="scale-label">Scale</span>
       <div class="seg" role="group" aria-labelledby="scale-label">
@@ -153,48 +293,137 @@ td.hi { font-weight: 700; }
     </div>
   </header>
   <p class="notice" id="synthetic-notice" hidden>Preview with a made-up league: the teams, names and numbers aren't real.</p>
-  <p class="notice" id="gaps-notice" hidden></p>
 
-  <section class="view">
+  <section class="view" id="view-teams" role="tabpanel" aria-labelledby="tab-teams">
+    <p class="notice" id="gaps-notice" hidden></p>
     <div class="controls">
-      <label class="field"><span>Season</span><select id="season"></select></label>
-      <label class="field grow"><span>Team</span><select id="team"></select></label>
+      <label class="field"><span>Season</span><select id="teams-season"></select></label>
+      <label class="field grow"><span>Team</span><select id="teams-team"></select></label>
       <div class="field"><span>Rotation</span>
         <div class="seg" role="group" aria-label="Rotation">
-          <button class="seg-btn" id="mode-regular" aria-pressed="true">Regular season</button>
-          <button class="seg-btn" id="mode-playoffs" aria-pressed="false">Playoff top 8</button>
+          <button class="seg-btn" id="teams-mode-regular" aria-pressed="true">Regular season</button>
+          <button class="seg-btn" id="teams-mode-playoffs" aria-pressed="false">Playoff top 8</button>
         </div>
       </div>
+      <label class="check"><input type="checkbox" id="teams-outline" checked> Team shape</label>
     </div>
-
-    <div class="split">
-      <div class="card">
-        <div class="chart-title"><h2 id="chart-title">Team</h2><span id="chart-sub"></span></div>
+    <div class="trio">
+      <figure class="card a-stage">
+        <div class="chart-title"><h2 id="teams-title">Team</h2><span id="teams-caption"></span></div>
         <div class="stage-wrap">
-          <canvas class="stage" id="stage" role="img" aria-label="The team's player shapes in three dimensions"></canvas>
-          <div class="seg spin"><button class="seg-btn" id="spin" aria-pressed="true">Spinning</button></div>
+          <canvas class="stage" id="teams-stage" role="img" aria-label="The team's player shapes in three dimensions"></canvas>
+          <div class="seg spin"><button class="seg-btn spin-btn" aria-pressed="true">Spinning</button></div>
         </div>
-        <p class="hint" id="hint"></p>
-      </div>
+        <p class="hint" id="teams-hint"></p>
+      </figure>
+      <div class="card plist a-players" id="teams-players"></div>
+      <div class="panel a-numbers" id="teams-panel"></div>
+    </div>
+  </section>
 
+  <section class="view" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden>
+    <div class="controls">
+      <fieldset class="pick"><legend>Team A</legend>
+        <select id="compare-a-season" aria-label="Team A season"></select>
+        <select id="compare-a-team" aria-label="Team A"></select>
+      </fieldset>
+      <fieldset class="pick"><legend>Team B</legend>
+        <select id="compare-b-season" aria-label="Team B season"></select>
+        <select id="compare-b-team" aria-label="Team B"></select>
+      </fieldset>
+      <div class="field"><span>Rotation</span>
+        <div class="seg" role="group" aria-label="Rotation">
+          <button class="seg-btn" id="compare-mode-regular" aria-pressed="true">Regular season</button>
+          <button class="seg-btn" id="compare-mode-playoffs" aria-pressed="false">Playoff top 8</button>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="compare-outline" checked> Team shapes</label>
+    </div>
+    <div class="duo">
+      <figure class="card">
+        <div class="chart-title"><h2 id="compare-a-title"></h2><span id="compare-a-caption"></span></div>
+        <div class="stage-wrap">
+          <canvas class="stage" id="compare-a-stage" role="img" aria-label="Team A's player shapes"></canvas>
+          <div class="seg spin"><button class="seg-btn spin-btn" aria-pressed="true">Spinning</button></div>
+        </div>
+      </figure>
+      <figure class="card">
+        <div class="chart-title"><h2 id="compare-b-title"></h2><span id="compare-b-caption"></span></div>
+        <div class="stage-wrap">
+          <canvas class="stage" id="compare-b-stage" role="img" aria-label="Team B's player shapes"></canvas>
+          <div class="seg spin"><button class="seg-btn spin-btn" aria-pressed="true">Spinning</button></div>
+        </div>
+      </figure>
+    </div>
+    <p class="hint">Drag either one: both turn together, so you see the same side of each team.</p>
+    <div class="versus" id="compare-versus"></div>
+  </section>
+
+  <section class="view" id="view-builder" role="tabpanel" aria-labelledby="tab-builder" hidden>
+    <div class="split">
+      <div class="builder-side">
+        <div>
+          <h2 style="font-size:24px">Your lineup</h2>
+          <p class="muted" style="margin:2px 0 8px">Five starters playing equal minutes, so a shape's size comes from impact alone. Mix players from any season.</p>
+          <ol class="slots" id="builder-slots"></ol>
+        </div>
+        <label class="field"><span>Add a player</span>
+          <input type="search" id="builder-search" placeholder="Search a name, e.g. Brunson" autocomplete="off" spellcheck="false">
+        </label>
+        <ul class="results" id="builder-results" aria-live="polite"></ul>
+        <div class="row">
+          <label class="field"><span>Start from a team</span><select id="builder-season" aria-label="Season"></select></label>
+          <label class="field grow"><span>&nbsp;</span><select id="builder-team" aria-label="Team"></select></label>
+          <button class="btn" id="builder-load">Use their top 5</button>
+          <button class="btn" id="builder-clear">Clear</button>
+        </div>
+      </div>
       <div class="panel">
-        <div class="stats">
-          <div class="stat hero"><span class="stat-label">Coverage</span><span class="stat-value" id="coverage">–</span><span class="stat-note" id="coverage-note"></span></div>
-          <div class="stat"><span class="stat-label">Overlap</span><span class="stat-value" id="overlap">–</span><span class="stat-note">shapes' shared volume</span></div>
-          <div class="stat"><span class="stat-label">Shapes</span><span class="stat-value" id="drawn">–</span><span class="stat-note" id="drawn-note"></span></div>
-        </div>
-        <div class="card reach">
-          <h3>Reach on each skill</h3>
-          <p>How far toward each end the team's best player there gets. The two ends of an axis can stand in for each other.</p>
-          <div id="reach"></div>
-        </div>
-        <div class="table-wrap"><table id="table"></table></div>
+        <figure class="card">
+          <div class="chart-title"><h2>Your five</h2><span id="builder-caption"></span></div>
+          <div class="stage-wrap">
+            <canvas class="stage" id="builder-stage" role="img" aria-label="Your lineup's player shapes"></canvas>
+            <div class="seg spin"><button class="seg-btn spin-btn" aria-pressed="true">Spinning</button></div>
+          </div>
+          <p class="hint">Drag to turn it. Hover a player below to light up his shape; tap for his numbers.</p>
+        </figure>
+        <div class="card plist" id="builder-players"></div>
+        <div id="builder-panel" class="panel"></div>
       </div>
     </div>
   </section>
 
+  <section class="view" id="view-game" role="tabpanel" aria-labelledby="tab-game" hidden>
+    <div class="controls">
+      <div class="field"><span>Mode</span>
+        <div class="seg" role="group" aria-label="Mode">
+          <button class="seg-btn" id="game-mode-daily" aria-pressed="true">Daily deal</button>
+          <button class="seg-btn" id="game-mode-free" aria-pressed="false">Free play</button>
+        </div>
+      </div>
+      <button class="btn" id="game-new">New game</button>
+    </div>
+    <p class="game-rules muted" id="game-rules"></p>
+    <div class="split">
+      <div class="builder-side" id="game-side"></div>
+      <div class="panel">
+        <figure class="card">
+          <div class="chart-title"><h2>Your five</h2><span id="game-caption"></span></div>
+          <div class="stage-wrap">
+            <canvas class="stage" id="game-stage" role="img" aria-label="Your signings' player shapes"></canvas>
+            <div class="seg spin"><button class="seg-btn spin-btn" aria-pressed="true">Spinning</button></div>
+          </div>
+          <p class="hint">Drag to turn it. Hover a player below to light up his shape; tap for his numbers.</p>
+        </figure>
+        <div class="card plist" id="game-players"></div>
+        <div id="game-panel" class="panel"></div>
+      </div>
+    </div>
+    <p class="muted game-foot" id="game-foot"></p>
+  </section>
+
   <footer class="foot">
-    <details open>
+    <details>
       <summary>How to read the 3D view</summary>
       <dl id="glossary"></dl>
     </details>
@@ -211,6 +440,7 @@ td.hi { font-weight: 700; }
   const RF = window.RosterFitCore;
   const M = DATA.meta;
   const SK = DATA.skills;
+  const GAME = DATA.game || null;
   const INDEX = RF.playerIndex(DATA);
   const SKI = RF.skillIndex(DATA);
   const SEASONS = M.seasons.slice();
@@ -221,6 +451,9 @@ td.hi { font-weight: 700; }
   const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
   const fmt = (v) => (v == null ? "–" : String(Math.round(v)));
   const mins = (v) => Math.round(v).toLocaleString("en-US");
+  const share = (v) => { const p = v * 100; return `${p < 9.95 ? p.toFixed(1) : Math.round(p)}%`; };
+  const yy = (s) => `${s.slice(2, 4)}-${s.slice(5)}`;
+  const norm = (s) => String(s).normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } },
@@ -229,54 +462,104 @@ td.hi { font-weight: 700; }
     perimeter_defense: "Perim D", rim_protection: "Rim" };
   const shortOf = (s) => SHORT[s] || SK.labels[s].split(" ")[0];
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // percentile by default here: a volume cubes the rank scale's shrink, so most shapes vanish
+  const S = { scale: store.get("rf3d-scale") === "rank" ? "rank" : "percentile" };
 
-  const state = {
-    season: LATEST, team: null, mode: "regular",
-    // percentile by default here: a volume cubes the rank scale's shrink, so most shapes vanish
-    scale: store.get("rf3d-scale") === "rank" ? "rank" : "percentile",
-    focus: null, yaw: -0.65, pitch: 0.42, spinning: !reduceMotion,
-  };
-  let result = null;
-  let view = [];   // drawn players with color slots, for the canvas
-
-  /* ---- teams ---- */
+  /* ---- data ------------------------------------------------------------------------------- */
+  const nOf = (season) => (M.qualified && M.qualified[season]) || 1;
+  const missingSkills = (season) => ORDER.filter((s) => !((SK.available[season] || []).includes(s)));
   const teamsIn = (season) => Object.entries(DATA.teams[season] || {})
     .map(([abbr, t]) => ({ abbr, name: t.name })).sort((a, b) => a.name.localeCompare(b.name));
   const hasPlayoffs = (season, abbr) => !!(DATA.teams[season] && DATA.teams[season][abbr] && DATA.teams[season][abbr].playoffs.length);
-  const missingSkills = (season) => ORDER.filter((s) => !((SK.available[season] || []).includes(s)));
+  const seasonItems = () => SEASONS.slice().reverse().map((s) => [s, s]);
+  const teamItems = (season) => teamsIn(season).map((t) => [t.abbr, t.name === t.abbr ? t.abbr : `${t.name} (${t.abbr})`]);
+  function fillSelect(sel, items, value) {
+    sel.replaceChildren(...items.map(([v, label]) => new Option(label, v)));
+    if (value != null && items.some(([v]) => v === value)) sel.value = value;
+  }
+  function defaultTeam(season, prefer) {
+    const list = teamsIn(season).map((t) => t.abbr);
+    for (const p of prefer) if (p && list.includes(p)) return p;
+    return list[0];
+  }
 
-  /* A skill the whole season lacks (its table isn't downloaded) is drawn at 0 for everyone, so the
-   * other five still show; a single player's gap still keeps his shape off. */
-  function entries(season, abbr, mode) {
+  /* One player-season as a 3D entry. A skill the whole season lacks (its table isn't downloaded)
+   * is drawn at 0 for everyone, so the other five still show; a single player's gap keeps his
+   * shape off. */
+  function entry(season, pid, min) {
+    const p = INDEX[season] && INDEX[season].get(pid);
+    const s = SKI[season] && SKI[season].get(pid);
+    const gap = new Set(missingSkills(season).map((sk) => ORDER.indexOf(sk)));
+    const pct = s ? s.pct.map((v, i) => (v == null && gap.has(i) ? 0 : v)) : null;
+    return { pid, season, key: `${pid}|${season}`, min, n: nOf(season), name: p ? p.name : String(pid),
+      team: p ? p.team : "", pos: p ? p.pos : null, pct, impact: s ? s.impact : null, gap };
+  }
+  const complete = (e) => !!e.pct && e.pct.every((v) => v != null) && e.impact != null;
+
+  /* A team's rotation: shape volume follows minutes. */
+  function scoreTeam(season, abbr, mode) {
     const team = DATA.teams[season] && DATA.teams[season][abbr];
     const pairs = team ? team[mode] || [] : [];
-    const gap = new Set(missingSkills(season).map((sk) => ORDER.indexOf(sk)));
-    return pairs.map(([pid, min]) => {
-      const p = INDEX[season] && INDEX[season].get(pid);
-      const s = SKI[season] && SKI[season].get(pid);
-      const pct = s ? s.pct.map((v, i) => (v == null && gap.has(i) ? 0 : v)) : null;
-      return { pid, min, name: p ? p.name : String(pid), pos: p ? p.pos : null,
-        pct, impact: s ? s.impact : null, gap };
-    });
+    return RF.evaluate3d(pairs.map(([pid, min]) => entry(season, pid, min)), {
+      scale: S.scale, n: nOf(season), sizeFloor: SK.size_floor, minutes: true,
+      minMinutes: mode === "playoffs" ? null : M.min_minutes_to_draw, dirs: DIRS });
   }
-  function score(season, abbr, mode, scale, dirs) {
-    return RF.evaluate3d(entries(season, abbr, mode), {
-      scale, n: (M.qualified && M.qualified[season]) || 1, sizeFloor: SK.size_floor, minutes: true,
-      minMinutes: mode === "playoffs" ? null : M.min_minutes_to_draw, dirs: dirs || DIRS,
-    });
+  /* Five starters at full size: equal minutes, so a shape's size comes from impact alone. */
+  function scoreLineup(list) {
+    return RF.evaluate3d(list.map((p) => entry(p.season, p.pid, 1)), {
+      scale: S.scale, n: nOf(LATEST), sizeFloor: SK.size_floor, minutes: false, minMinutes: null, dirs: DIRS });
   }
 
-  /* Every team-season's coverage in the pool, per rotation and scale, to rank a team against. */
+  /* A rotation's six team values (minutes-weighted, below average counting 0: RF.teamSkillValues). */
+  function teamValues(season, abbr, mode) {
+    const team = DATA.teams[season] && DATA.teams[season][abbr];
+    const pairs = team ? team[mode] || [] : [];
+    return RF.teamSkillValues(pairs.map(([pid, min]) => entry(season, pid, min)));
+  }
+  const lineupValues = (list) => RF.teamSkillValues(list.map((p) => entry(p.season, p.pid, 1)), { fixedWeight: 1 });
+
+  /* What to rank against: every team-season's rotation (coverage, the six team values, depth), or
+   * every team's real top five by minutes (coverage). */
   const poolCache = new Map();
-  function coveragePool(mode, scale, gapKey) {
-    const key = `${mode}|${scale}|${gapKey}`;
+  const ascending = (a, b) => a - b;
+  function teamPool(mode, gapKey) {
+    const key = `team|${mode}|${S.scale}|${gapKey}`;
     if (!poolCache.has(key)) {
-      const out = [];
+      const coverage = [];
+      const values = [];
       for (const season of M.pool_seasons || []) {
         if (missingSkills(season).join() !== gapKey) continue;  // compare like with like
         for (const abbr of Object.keys(DATA.teams[season] || {})) {
           if (mode === "playoffs" && !hasPlayoffs(season, abbr)) continue;
-          out.push(score(season, abbr, mode, scale).coverage);
+          coverage.push(scoreTeam(season, abbr, mode).coverage);
+          values.push(teamValues(season, abbr, mode));
+        }
+      }
+      const pool = { coverage: coverage.sort(ascending), skills: ORDER.map((_, i) => values.map((v) => v[i]).sort(ascending)) };
+      pool.depth = values.map((v) => shapeOf(v, pool).depth).sort(ascending);
+      poolCache.set(key, pool);
+    }
+    return poolCache.get(key);
+  }
+  /* The team shape (the 2D depth outline in 3D): each skill's team value as a percentile among the
+   * pool's team-seasons, placed on the scale; depth is its volume. */
+  function shapeOf(values, pool) {
+    if (!pool.skills[0].length) return null;
+    const pct = values.map((v, i) => RF.pctAgainst(pool.skills[i], v));
+    const r = pct.map((q, i) => RF.radius(q, pool.skills[i].length, S.scale) || 0);
+    return { pct, r, depth: RF.octaVolumeShare(r) };
+  }
+  const topFive = (season, abbr) => ((DATA.teams[season][abbr] || {}).regular || [])
+    .map(([pid]) => entry(season, pid, 1)).filter(complete).slice(0, 5);
+  function fivesPool() {
+    const key = `fives|${S.scale}`;
+    if (!poolCache.has(key)) {
+      const out = [];
+      for (const season of M.pool_seasons || []) {
+        if (missingSkills(season).length) continue;
+        for (const abbr of Object.keys(DATA.teams[season] || {})) {
+          const five = topFive(season, abbr);
+          if (five.length === 5) out.push(scoreLineup(five).coverage);
         }
       }
       poolCache.set(key, out.sort((a, b) => a - b));
@@ -284,48 +567,38 @@ td.hi { font-weight: 700; }
     return poolCache.get(key);
   }
 
-  /* ---- canvas ---- */
-  const canvas = $("stage");
-  const ctx = canvas.getContext("2d");
+  /* ---- drawing ---------------------------------------------------------------------------- */
+  // one camera for every stage: turning one turns them all
+  const CAM = { yaw: -0.65, pitch: 0.42, spinning: !reduceMotion };
+  const GLYPH_CAM = { yaw: -0.65, pitch: 0.42 };
   let colors = {};
   function readColors() {
     const cs = getComputedStyle(document.documentElement);
     const v = (n) => cs.getPropertyValue(n).trim();
-    colors = { ink: v("--ink"), ink2: v("--ink-2"), muted: v("--muted"), grid: v("--grid"), axis: v("--axis"),
-      surface: v("--surface"), other: v("--other"), accent: v("--accent"),
+    colors = { ink: v("--ink"), muted: v("--muted"), axis: v("--axis"), surface: v("--surface"), other: v("--other"),
       slots: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => v(`--s${i}`)) };
   }
   readColors();
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readColors(); draw(); });
-  new MutationObserver(() => { readColors(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
   // model axes: x = first pair, y = second pair (depth), z = third pair (up: perimeter, down: rim)
-  function project(p, W) {
+  const EYE = 5;  // the viewer sits this far in front of the center
+  /* Camera space: x right, y away from the viewer, z up. */
+  function rotate(p, cam) {
     const [x, y, z] = p;
-    const cy = Math.cos(state.yaw), sy = Math.sin(state.yaw);
-    const cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
-    const x1 = x * cy - y * sy;
+    const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+    const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
     const y1 = x * sy + y * cy;
-    const y2 = y1 * cp - z * sp;
-    const z2 = y1 * sp + z * cp;
-    const D = 5;
-    const f = D / (D + y2);
-    const k = W * 0.35;
+    return [x * cy - y * sy, y1 * cp - z * sp, y1 * sp + z * cp];
+  }
+  function project(p, W, cam) {
+    const [x1, y2, z2] = rotate(p, cam);
+    const f = EYE / (EYE + y2);
+    const k = W * (cam === GLYPH_CAM ? 0.42 : 0.35);
     return [W / 2 + k * x1 * f, W / 2 - k * z2 * f, y2];
   }
   const vertex = (i, r) => RF.AXIS_DIRS[i].map((c) => c * r);
-
-  function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = canvas.clientWidth || 500;
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(w * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    draw();
-  }
-  new ResizeObserver(resize).observe(canvas);
-
-  function line(a, b, color, width, dash) {
+  const EDGES = [[0, 2], [2, 1], [1, 3], [3, 0], [0, 4], [1, 4], [2, 4], [3, 4], [0, 5], [1, 5], [2, 5], [3, 5]];
+  function line(ctx, a, b, color, width, dash) {
     ctx.beginPath();
     ctx.moveTo(a[0], a[1]);
     ctx.lineTo(b[0], b[1]);
@@ -336,63 +609,97 @@ td.hi { font-weight: 700; }
     ctx.setLineDash([]);
   }
 
-  function draw() {
-    const W = canvas.clientWidth || 500;
+  /* The team shape on top of the players: a light fill on the faces turned toward you, bold front
+   * edges, thin dashed back edges, in the text color (black on light, white on dark). */
+  function paintOutline(ctx, W, cam, r) {
+    const verts = r.map((v, i) => vertex(i, v));
+    const camv = verts.map((v) => rotate(v, cam));
+    const pts = verts.map((v) => project(v, W, cam));
+    const facing = RF.OCTA_FACES.map(([a, b, c]) => {
+      const [A, B, C] = [camv[a], camv[b], camv[c]];
+      const u = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
+      const w = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
+      const nrm = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];  // outward
+      const view = [A[0], A[1] + EYE, A[2]];  // from the eye to the face
+      return nrm[0] * view[0] + nrm[1] * view[1] + nrm[2] * view[2] < 0;
+    });
+    ctx.fillStyle = colors.ink;
+    RF.OCTA_FACES.forEach((f, k) => {
+      if (!facing[k]) return;
+      ctx.beginPath();
+      ctx.moveTo(pts[f[0]][0], pts[f[0]][1]);
+      ctx.lineTo(pts[f[1]][0], pts[f[1]][1]);
+      ctx.lineTo(pts[f[2]][0], pts[f[2]][1]);
+      ctx.closePath();
+      ctx.globalAlpha = 0.06;
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    for (const [a, b] of EDGES) {
+      const front = RF.OCTA_FACES.some((f, k) => facing[k] && f.includes(a) && f.includes(b));
+      ctx.globalAlpha = front ? 1 : 0.45;
+      line(ctx, pts[a], pts[b], colors.ink, front ? 2.6 : 1.2, front ? [] : [4, 4]);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* Paint shapes. view: [{key, r: six radii, slot: color 0-7 or null, ghost}].
+   * o: {focus, n, small, outline: the team shape's six radii} */
+  function paint(ctx, W, cam, view, o) {
     ctx.clearRect(0, 0, W, W);
-    // the full octahedron's edges and the three axes
-    const full = RF.AXIS_DIRS.map((d) => project(d, W));
-    const edges = [[0, 2], [2, 1], [1, 3], [3, 0], [0, 4], [1, 4], [2, 4], [3, 4], [0, 5], [1, 5], [2, 5], [3, 5]];
-    for (const [a, b] of edges) line(full[a], full[b], colors.axis, 1, [3, 4]);
-    for (let i = 0; i < 6; i += 2) line(full[i], full[i + 1], colors.axis, 1);
-    // guide dots on each axis: the scale's rings
-    const n = (M.qualified && M.qualified[state.season]) || 1;
-    for (const [d] of RF.rings(n, state.scale)) {
-      for (let i = 0; i < 6; i++) {
-        const q = project(vertex(i, d), W);
-        ctx.beginPath();
-        ctx.arc(q[0], q[1], 2, 0, 2 * Math.PI);
-        ctx.fillStyle = colors.axis;
-        ctx.fill();
+    const full = RF.AXIS_DIRS.map((d) => project(d, W, cam));
+    for (const [a, b] of EDGES) line(ctx, full[a], full[b], colors.axis, o.small ? 0.6 : 1, o.small ? [] : [3, 4]);
+    for (let i = 0; i < 6; i += 2) line(ctx, full[i], full[i + 1], colors.axis, o.small ? 0.6 : 1);
+    if (!o.small) {  // the scale's rings, as dots on each axis
+      for (const [d] of RF.rings(o.n || 1, S.scale)) {
+        for (let i = 0; i < 6; i++) {
+          const q = project(vertex(i, d), W, cam);
+          ctx.beginPath();
+          ctx.arc(q[0], q[1], 2, 0, 2 * Math.PI);
+          ctx.fillStyle = colors.axis;
+          ctx.fill();
+        }
       }
     }
-    // faces of every shape, far to near
     const faces = [];
     for (const p of view) {
-      const pts = p.r.map((r, i) => project(vertex(i, r), W));
-      for (const f of RF.OCTA_FACES) {
-        faces.push({ p, pts: f.map((i) => pts[i]), depth: (pts[f[0]][2] + pts[f[1]][2] + pts[f[2]][2]) / 3 });
-      }
+      const pts = p.r.map((r, i) => project(vertex(i, r), W, cam));
+      for (const f of RF.OCTA_FACES) faces.push({ p, pts: f.map((i) => pts[i]), depth: (pts[f[0]][2] + pts[f[1]][2] + pts[f[2]][2]) / 3 });
     }
     faces.sort((a, b) => b.depth - a.depth);
-    const focusing = state.focus != null && view.some((p) => p.pid === state.focus);
+    const focusing = o.focus != null && view.some((p) => p.key === o.focus);
     for (const { p, pts } of faces) {
-      const color = p.slot != null ? colors.slots[p.slot] : colors.other;
-      const dim = focusing && p.pid !== state.focus;
-      const lit = focusing && p.pid === state.focus;
+      const color = p.ghost || p.slot == null ? colors.other : colors.slots[p.slot];
+      const dim = focusing && p.key !== o.focus;
+      const lit = focusing && p.key === o.focus;
       ctx.beginPath();
       ctx.moveTo(pts[0][0], pts[0][1]);
       ctx.lineTo(pts[1][0], pts[1][1]);
       ctx.lineTo(pts[2][0], pts[2][1]);
       ctx.closePath();
-      ctx.globalAlpha = dim ? 0.03 : lit ? 0.26 : p.slot != null ? 0.12 : 0.05;
+      ctx.globalAlpha = p.ghost ? 0.1 : dim ? 0.03 : lit ? 0.26 : p.slot != null ? (o.small ? 0.22 : 0.12) : 0.05;
       ctx.fillStyle = color;
       ctx.fill();
-      ctx.globalAlpha = dim ? 0.12 : p.slot != null ? 0.9 : 0.45;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = lit ? 2.2 : p.slot != null ? 1.3 : 0.8;
-      ctx.lineJoin = "round";
-      ctx.stroke();
+      if (!p.ghost) {
+        ctx.globalAlpha = dim ? 0.12 : p.slot != null ? 0.9 : 0.45;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = o.small ? 1 : lit ? 2.2 : p.slot != null ? 1.3 : 0.8;
+        ctx.lineJoin = "round";
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
     }
-    // axis-end labels
+    if (o.small) return;
+    if (o.outline && o.outline.some((v) => v > 0)) paintOutline(ctx, W, cam, o.outline);
     ctx.font = `600 ${W < 420 ? 12 : 13.5}px ${getComputedStyle(document.body).fontFamily}`;
     ctx.textBaseline = "middle";
     ORDER.forEach((skill, i) => {
-      const q = project(vertex(i, 1.13), W);
+      const q = project(vertex(i, 1.13), W, cam);
       const text = SK.labels[skill];
       const w = ctx.measureText(text).width;
-      let x = q[0] - w / 2;
-      x = Math.min(Math.max(x, 4), W - w - 4);
+      const x = Math.min(Math.max(q[0] - w / 2, 4), W - w - 4);
       const y = Math.min(Math.max(q[1], 10), W - 10);
       ctx.fillStyle = q[2] > 0.35 ? colors.muted : colors.ink;
       ctx.lineWidth = 4;
@@ -402,169 +709,670 @@ td.hi { font-weight: 700; }
     });
   }
 
-  /* drag to turn; horizontal drags on phones, so the page still scrolls */
-  let drag = null;
-  canvas.addEventListener("pointerdown", (e) => {
-    drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
-    canvas.setPointerCapture(e.pointerId);
-    canvas.classList.add("dragging");
-    setSpin(false);
-  });
-  canvas.addEventListener("pointermove", (e) => {
-    if (!drag || e.pointerId !== drag.id) return;
-    state.yaw += (e.clientX - drag.x) * 0.01;
-    state.pitch = Math.min(1.45, Math.max(-1.45, state.pitch + (e.clientY - drag.y) * 0.01));
-    drag.x = e.clientX;
-    drag.y = e.clientY;
-    draw();
-  });
-  const endDrag = () => { drag = null; canvas.classList.remove("dragging"); };
-  canvas.addEventListener("pointerup", endDrag);
-  canvas.addEventListener("pointercancel", endDrag);
-  canvas.addEventListener("keydown", (e) => {
-    const step = { ArrowLeft: [-0.15, 0], ArrowRight: [0.15, 0], ArrowUp: [0, -0.15], ArrowDown: [0, 0.15] }[e.key];
-    if (!step) return;
-    e.preventDefault();
-    setSpin(false);
-    state.yaw += step[0];
-    state.pitch = Math.min(1.45, Math.max(-1.45, state.pitch + step[1]));
-    draw();
-  });
-  canvas.tabIndex = 0;
-
+  const STAGES = [];
+  function makeStage(id) {
+    const canvas = $(id);
+    const st = { canvas, ctx: canvas.getContext("2d"), view: [], focus: null, hover: null, n: nOf(LATEST), W: 500, outline: null };
+    st.draw = () => paint(st.ctx, st.W, CAM, st.view, { focus: st.hover != null ? st.hover : st.focus, n: st.n, outline: st.outline });
+    new ResizeObserver(() => {
+      const w = canvas.clientWidth;
+      if (!w) return;  // hidden tab
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      st.W = w;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(w * dpr);
+      st.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      st.draw();
+    }).observe(canvas);
+    // drag to turn; horizontal drags on phones, so the page still scrolls
+    let drag = null;
+    canvas.addEventListener("pointerdown", (e) => {
+      drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      canvas.setPointerCapture(e.pointerId);
+      canvas.classList.add("dragging");
+      setSpin(false);
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      turn((e.clientX - drag.x) * 0.01, (e.clientY - drag.y) * 0.01);
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+    });
+    const end = () => { drag = null; canvas.classList.remove("dragging"); };
+    canvas.addEventListener("pointerup", end);
+    canvas.addEventListener("pointercancel", end);
+    canvas.tabIndex = 0;
+    canvas.addEventListener("keydown", (e) => {
+      const step = { ArrowLeft: [-0.15, 0], ArrowRight: [0.15, 0], ArrowUp: [0, -0.15], ArrowDown: [0, 0.15] }[e.key];
+      if (!step) return;
+      e.preventDefault();
+      setSpin(false);
+      turn(step[0], step[1]);
+    });
+    STAGES.push(st);
+    return st;
+  }
+  const drawAll = () => { for (const st of STAGES) if (st.canvas.offsetParent !== null) st.draw(); };
+  function turn(dyaw, dpitch) {
+    CAM.yaw += dyaw;
+    CAM.pitch = Math.min(1.45, Math.max(-1.45, CAM.pitch + dpitch));
+    drawAll();
+  }
   let last = null;
   function tick(t) {
-    if (!state.spinning) { last = null; return; }
-    if (last != null) state.yaw += (t - last) * 0.00025;
+    if (!CAM.spinning) { last = null; return; }
+    if (last != null) CAM.yaw += (t - last) * 0.00025;
     last = t;
-    draw();
+    drawAll();
     requestAnimationFrame(tick);
   }
+  function syncSpinButtons() {
+    for (const b of document.querySelectorAll(".spin-btn")) {
+      b.setAttribute("aria-pressed", String(CAM.spinning));
+      b.textContent = CAM.spinning ? "Spinning" : "Spin";
+    }
+  }
   function setSpin(on) {
-    if (state.spinning === on) return;
-    state.spinning = on;
-    $("spin").setAttribute("aria-pressed", String(on));
-    $("spin").textContent = on ? "Spinning" : "Spin";
+    if (CAM.spinning === on) return;
+    CAM.spinning = on;
+    syncSpinButtons();
     if (on) requestAnimationFrame(tick);
   }
-  $("spin").addEventListener("click", () => setSpin(!state.spinning));
+  document.addEventListener("click", (e) => { if (e.target.closest(".spin-btn")) setSpin(!CAM.spinning); });
+  const redrawColors = () => { readColors(); drawAll(); if (GAME) drawGlyphs(); };
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redrawColors);
+  new MutationObserver(redrawColors).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
-  /* ---- panel ---- */
-  function render() {
-    const { season, team, mode, scale } = state;
-    const gaps = missingSkills(season);
-    $("gaps-notice").hidden = !gaps.length;
-    if (gaps.length) {
-      $("gaps-notice").textContent = `${season} has no ${gaps.map((s) => SK.labels[s]).join(", ")} numbers yet, so ${gaps.length > 1 ? "those ends are" : "that end is"} drawn at 0 for everyone and coverage is ranked only against seasons missing the same. ` +
-        "Once the data is in (python -m rosterfit check shows what's missing), export again.";
-    }
-    result = score(season, team, mode, scale);
-    const order = (DATA.teams[season][team].regular || []).map(([pid]) => pid);
-    const drawn = result.players.filter((p) => p.drawn).sort((a, b) => b.min - a.min);
-    const slots = RF.assignColors(drawn.slice(0, 8).map((p) => p.pid), order, 8);
-    view = drawn.map((p) => ({ ...p, slot: slots.has(p.pid) ? slots.get(p.pid) : null }));
-    const slotOf = new Map(view.map((p) => [p.pid, p.slot]));
-    if (state.focus != null && !view.some((p) => p.pid === state.focus)) state.focus = null;
+  /* A drawn result as stage shapes. slotOf: key -> color slot. */
+  const viewOf = (res, slotOf) => res.players.filter((p) => p.drawn)
+    .map((p) => ({ key: p.key, r: p.r, slot: slotOf.has(p.key) ? slotOf.get(p.key) : null }));
+  /* Team colors: slot k goes to the team's k-th player by regular-season minutes in every view. */
+  function teamSlots(res, season, abbr) {
+    const order = ((DATA.teams[season][abbr] || {}).regular || []).map(([pid]) => `${pid}|${season}`);
+    const drawn = res.players.filter((p) => p.drawn).sort((a, b) => b.min - a.min);
+    return RF.assignColors(drawn.slice(0, 8).map((p) => p.key), order, 8);
+  }
 
-    const t = DATA.teams[season][team];
-    $("chart-title").textContent = `${t.name} ${season}`;
-    $("chart-sub").textContent = mode === "playoffs" ? "playoff top 8 by minutes" : "regular season rotation";
+  /* ---- numbers ---------------------------------------------------------------------------- */
+  /* cov: {pool, label} to rank coverage against; shape: the team shape (or null), depth ranked
+   * against depthPool; depthNote: shown instead when there's no team shape yet. */
+  function statsHTML(res, cov, shape, depthPool, depthNote) {
+    const drawn = res.players.filter((p) => p.drawn).length;
+    const pct = drawn && cov.pool.length ? RF.pctAgainst(cov.pool, res.coverage) : null;
+    const note = !drawn ? "no shapes to measure"
+      : pct == null ? `of the full shape, by ${drawn} player${drawn === 1 ? "" : "s"}` : `of the full shape; better than ${Math.round(pct)}% of ${cov.pool.length} ${cov.label}`;
+    const dpct = shape && depthPool && depthPool.length ? RF.pctAgainst(depthPool, shape.depth) : null;
+    const dnote = !shape ? depthNote || "" : dpct == null ? "inside the team shape" : `inside the team shape; better than ${Math.round(dpct)}%`;
+    return `<div class="stats">
+      <div class="stat hero"><span class="stat-label">Coverage</span><span class="stat-value">${drawn ? share(res.coverage) : "–"}</span><span class="stat-note">${esc(note)}</span></div>
+      <div class="stat"><span class="stat-label">Depth</span><span class="stat-value">${shape ? share(shape.depth) : "–"}</span><span class="stat-note">${esc(dnote)}</span></div>
+      <div class="stat"><span class="stat-label">Overlap</span><span class="stat-value">${drawn ? res.overlap.toFixed(2) : "–"}</span><span class="stat-note">shapes' shared volume</span></div></div>`;
+  }
 
-    const pool = coveragePool(mode, scale, gaps.join());
-    const pct = RF.pctAgainst(pool, result.coverage);
-    const cov = result.coverage * 100;
-    $("coverage").textContent = drawn.length ? `${cov < 9.95 ? cov.toFixed(1) : Math.round(cov)}%` : "–";
-    $("coverage-note").textContent = drawn.length
-      ? (pct == null ? "of the full shape" : `of the full shape; better than ${Math.round(pct)}% of ${pool.length} team-seasons`)
-      : "no shapes to measure";
-    $("overlap").textContent = drawn.length ? result.overlap.toFixed(2) : "–";
-    $("drawn").textContent = String(drawn.length);
-    $("drawn-note").textContent = mode === "playoffs" ? "every rotation player" : `players with ${M.min_minutes_to_draw}+ min`;
-
-    // reach per skill, grouped by axis
-    const byPid = new Map(result.players.map((p) => [p.pid, p]));
+  function reachHTML(res, slotOf, gaps, who, shape) {
+    const byKey = new Map(res.players.map((p) => [p.key, p]));
     const groups = SK.pairs.map((pair, a) => {
       const rows = pair.map((skill) => {
         const i = ORDER.indexOf(skill);
-        const b = gaps.includes(skill) ? null : result.best[i];  // a season-wide gap has no leader
-        const who = b ? byPid.get(b.pid) : null;
-        const slot = who ? slotOf.get(who.pid) : null;
-        const cls = slot != null ? ` c${slot + 1}` : " o";
-        return `<div class="bar-row"><div class="lab"><b>${esc(SK.labels[skill])}</b><span>${who ? esc(who.name) : gaps.includes(skill) ? "no data yet" : "nobody"}</span></div>` +
-          `<div class="bar-track"><span class="bar-fill${cls}" style="width:${b ? (b.value * 100).toFixed(1) : 0}%"></span></div>` +
+        const b = gaps.includes(skill) ? null : res.best[i];  // a season-wide gap has no leader
+        const p = b ? byKey.get(b.key) : null;
+        const cls = p && slotOf.has(p.key) ? ` c${slotOf.get(p.key) + 1}` : " o";
+        return `<div class="bar-row"><div class="lab"><b>${esc(SK.labels[skill])}</b><span>${p ? esc(p.name) : gaps.includes(skill) ? "no data yet" : "nobody"}</span></div>` +
+          `<div class="bar-track"><span class="bar-fill${cls}" style="width:${b ? (b.value * 100).toFixed(1) : 0}%"></span>` +
+          (shape ? `<span class="bar-tick" style="left:${Math.min(shape.r[i] * 100, 99.5).toFixed(1)}%" title="Team shape: ${Math.round(shape.r[i] * 100)}"></span>` : "") + `</div>` +
           `<span class="bar-val">${b ? Math.round(b.value * 100) : "–"}</span></div>`;
       }).join("");
       return `<div class="axis-group"><span class="axis-cap">Axis ${a + 1}</span>${rows}</div>`;
-    });
-    $("reach").innerHTML = groups.join("");
-
-    // player table
-    const rows = result.players.slice().sort((a, b) => b.min - a.min);
-    const head = `<thead><tr><th>Player</th><th>Min</th><th title="LEBRON + DARKO impact percentile: sets the shape's size">Impact</th>${ORDER.map((s) => `<th title="${esc(SK.labels[s])}">${esc(shortOf(s))}</th>`).join("")}</tr></thead>`;
-    const body = rows.map((p) => {
-      const slot = slotOf.has(p.pid) ? slotOf.get(p.pid) : null;
-      const sw = p.drawn ? `<i class="swatch${slot != null ? ` c${slot + 1}` : ""}"></i>` : `<i class="swatch" style="visibility:hidden"></i>`;
-      const top = p.pct ? Math.max(...p.pct.map((v) => v == null ? -1 : v)) : null;
-      const cells = ORDER.map((_, i) => {
-        const v = p.pct && !(p.gap && p.gap.has(i)) ? p.pct[i] : null;  // a season-wide gap shows "–", not 0
-        return `<td${v != null && v === top && v >= 80 ? ' class="hi"' : ""}>${fmt(v)}</td>`;
-      }).join("");
-      const cls = [p.drawn ? "" : "undrawn", p.pid === state.focus ? "is-focus" : ""].filter(Boolean).join(" ");
-      return `<tr data-pid="${p.pid}"${cls ? ` class="${cls}"` : ""}${p.drawn ? ' tabindex="0"' : ""}><td>${sw}${esc(p.name)}${p.pos ? `<span class="pos">${esc(p.pos)}</span>` : ""}</td><td>${mins(p.min)}</td><td>${fmt(p.impact)}</td>${cells}</tr>`;
     }).join("");
-    $("table").innerHTML = head + `<tbody>${body}</tbody>`;
-
-    const ringNote = scale === "rank" ? "Dots on each axis mark the top 5, 20 and 50." : "Dots on each axis mark the 25th, 50th and 75th percentiles.";
-    $("hint").textContent = `Drag to turn it. Tap a player to pick out his shape. ${ringNote}`;
-    draw();
+    return `<div class="card reach"><h3>Reach on each skill</h3>
+      <p>Bars: how far toward each end ${esc(who)} best player there gets.${shape ? " The line across each bar: where the team shape reaches." : ""} The two ends of an axis can stand in for each other.</p>${groups}</div>`;
   }
 
-  $("table").addEventListener("click", (e) => {
-    const tr = e.target.closest("tr[data-pid]");
-    if (!tr || tr.classList.contains("undrawn")) return;
-    const pid = Number(tr.dataset.pid);
-    state.focus = state.focus === pid ? null : pid;
-    render();
+  /* ---- players list: hover a row to light up his shape, tap to keep it lit and open his numbers -- */
+  const PART_NAMES = {
+    unassisted_fgm_per100: "unassisted makes", drives_per100: "drives", fta_per100: "FT attempts",
+    potential_ast_per100: "potential assists", ast_pts_created_per100: "assist points",
+    three_volume: "3PA volume", three_accuracy: "3P%", oreb_pct: "off. rebound %", screen_ast_per100: "screen assists",
+    stl_per100: "steals", deflections_per100: "deflections", contested3_per100: "contested 3s",
+    matchup_difficulty: "who he guarded", rim_points_saved_per100: "rim points saved",
+    rim_contests_per100: "rim contests", blk_per100: "blocks",
+  };
+  const CORNER_IDX = Object.fromEntries(M.corners.map((c, i) => [c, i]));
+  const shownPct = (p) => ORDER.map((_, i) => (p.pct && !(p.gap && p.gap.has(i)) ? p.pct[i] : null));  // a season-wide gap shows "–"
+
+  function detailHTML(p) {
+    const info = INDEX[p.season] && INDEX[p.season].get(p.pid);
+    const sk = SKI[p.season] && SKI[p.season].get(p.pid);
+    const roles = info ? [info.offRole, info.defRole].filter(Boolean).join(" / ") : "";
+    const line = [info && info.team, p.season, p.pos, info && `${mins(info.min)} min`, roles].filter(Boolean).join(" · ");
+    const corner = (c) => (info && CORNER_IDX[c] != null ? info.pct[CORNER_IDX[c]] : null);
+    const facts = [[fmt(p.impact), "impact (sets the size)"], [fmt(corner("offense")), "offense"], [fmt(corner("defense")), "defense"]];
+    if (p.volume != null) facts.push([share(p.volume), "of the full shape"]);
+    const shown = shownPct(p);
+    const axes = SK.pairs.map((pair) => `<div class="paxis">${pair.map((skill) => {
+      const i = ORDER.indexOf(skill);
+      const v = shown[i];
+      const parts = sk && sk.parts ? Object.keys(SK.components[skill]).map((c) => `${PART_NAMES[c] || c} ${fmt(sk.parts[c])}`).join(" · ") : "";
+      return `<div class="psk"><div class="psk-top"><b>${esc(SK.labels[skill])}</b><span>${fmt(v)}</span></div>
+        <div class="bar-track"><span class="bar-fill" style="width:${v == null ? 0 : v}%"></span></div>
+        ${parts ? `<div class="psk-parts">${esc(parts)}</div>` : ""}</div>`;
+    }).join("")}</div>`).join("");
+    const note = SK.component_pct ? "Percentiles among the season's qualified players; the small numbers are the stats behind each skill."
+      : "Percentiles among the season's qualified players. Export again to see the stats behind each skill.";
+    return `<p class="pline">${esc(line)}</p>
+      <div class="pfacts">${facts.map(([v, t]) => `<span><b>${esc(v)}</b>${esc(t)}</span>`).join("")}</div>
+      ${axes}<p class="pnote">${esc(note)}</p>`;
+  }
+
+  /* opts: {title, sub(p) -> the line under the name, empty: text when there's nobody} */
+  function playerListHTML(res, slotOf, focus, opts) {
+    const rows = res.players.slice().sort((a, b) => b.min - a.min);
+    const head = `<div class="plist-head"><h3>${esc(opts.title || "Players")}</h3><span>Hover to light up a shape · tap for his numbers</span></div>`;
+    if (!rows.length) return head + `<p class="plist-empty">${esc(opts.empty || "Nobody yet.")}</p>`;
+    const cols = `<div class="prow-cols" aria-hidden="true"><span></span><span>Player</span><span>Six skills</span><span title="LEBRON + DARKO impact percentile: sets the shape's size">Impact</span><span></span></div>`;
+    const items = rows.map((p) => {
+      const slot = slotOf.has(p.key) ? slotOf.get(p.key) : null;
+      const open = p.key === focus;
+      const shown = shownPct(p);
+      const cls = ["prow", slot != null ? `c${slot + 1}` : "", p.drawn ? "" : "undrawn", open ? "open" : ""].filter(Boolean).join(" ");
+      const mini = shown.map((v, i) => `<i${i && i % 2 === 0 ? ' class="axis"' : ""} style="height:${Math.max(2, (v || 0) * 0.2).toFixed(1)}px"></i>`).join("");
+      const title = ORDER.map((sk, i) => `${shortOf(sk)} ${fmt(shown[i])}`).join(" · ");
+      const sw = `<i class="swatch"${p.drawn ? "" : ' style="visibility:hidden"'}></i>`;
+      return `<li class="${cls}" data-key="${esc(p.key)}"><button class="prow-btn" aria-expanded="${open}">${sw}
+          <span class="pname"><b>${esc(p.name)}</b><span>${esc(opts.sub(p))}${p.drawn ? "" : " · no shape"}</span></span>
+          <span class="pmini" title="${esc(title)}" aria-label="${esc(title)}">${mini}</span>
+          <span class="pimpact">${fmt(p.impact)}</span><span class="chev" aria-hidden="true">▾</span></button>
+        ${open ? `<div class="pdetail">${detailHTML(p)}</div>` : ""}</li>`;
+    }).join("");
+    return head + cols + `<ul class="prows">${items}</ul>`;
+  }
+
+  function makeList(id, stage, opts) {
+    const el = $(id);
+    const L = { res: { players: [] }, slots: new Map(), opts };
+    L.render = () => { el.innerHTML = playerListHTML(L.res, L.slots, stage.focus, L.opts); };
+    L.set = (res, slots) => { L.res = res; L.slots = slots; L.render(); };
+    el.addEventListener("click", (e) => {
+      const btn = e.target.closest(".prow-btn");
+      if (!btn) return;
+      const key = btn.parentElement.dataset.key;
+      stage.focus = stage.focus === key ? null : key;
+      L.render();
+      const again = el.querySelector(`.prow[data-key="${CSS.escape(key)}"] .prow-btn`);
+      if (again) again.focus({ preventScroll: true });
+      stage.draw();
+    });
+    el.addEventListener("pointerover", (e) => {
+      if (e.pointerType !== "mouse") return;  // on touch, a tap is the only way in
+      const li = e.target.closest(".prow");
+      const key = li ? li.dataset.key : null;
+      if (stage.hover !== key) { stage.hover = key; stage.draw(); }
+    });
+    el.addEventListener("pointerleave", () => { if (stage.hover != null) { stage.hover = null; stage.draw(); } });
+    return L;
+  }
+  const keepFocus = (stage, res) => {
+    if (!res.players.some((p) => p.key === stage.focus)) stage.focus = null;
+    if (!res.players.some((p) => p.key === stage.hover)) stage.hover = null;
+  };
+
+  /* ---- Teams ------------------------------------------------------------------------------ */
+  const T = { season: LATEST, team: null, mode: "regular" };
+  const teamsStage = makeStage("teams-stage");
+  const teamsList = makeList("teams-players", teamsStage, { title: "Players", sub: (p) => [p.pos, `${mins(p.min)} min`].filter(Boolean).join(" · ") });
+  function renderTeams() {
+    fillSelect($("teams-season"), seasonItems(), T.season);
+    fillSelect($("teams-team"), teamItems(T.season), T.team);
+    T.team = $("teams-team").value;
+    const po = hasPlayoffs(T.season, T.team);
+    if (!po && T.mode === "playoffs") T.mode = "regular";
+    $("teams-mode-playoffs").disabled = !po;
+    $("teams-mode-playoffs").title = po ? "" : "Didn't make the playoffs";
+    $("teams-mode-regular").setAttribute("aria-pressed", String(T.mode === "regular"));
+    $("teams-mode-playoffs").setAttribute("aria-pressed", String(T.mode === "playoffs"));
+    const gaps = missingSkills(T.season);
+    $("gaps-notice").hidden = !gaps.length;
+    if (gaps.length) {
+      $("gaps-notice").textContent = `${T.season} has no ${gaps.map((s) => SK.labels[s]).join(", ")} numbers yet, so ${gaps.length > 1 ? "those ends are" : "that end is"} drawn at 0 for everyone and coverage is ranked only against seasons missing the same. ` +
+        "Once the data is in (python -m rosterfit check shows what's missing), export again.";
+    }
+    const res = scoreTeam(T.season, T.team, T.mode);
+    const slots = teamSlots(res, T.season, T.team);
+    const pool = teamPool(T.mode, gaps.join());
+    const shape = shapeOf(teamValues(T.season, T.team, T.mode), pool);
+    keepFocus(teamsStage, res);
+    teamsStage.view = viewOf(res, slots);
+    teamsStage.outline = shape && $("teams-outline").checked ? shape.r : null;
+    teamsStage.n = nOf(T.season);
+    $("teams-title").textContent = `${DATA.teams[T.season][T.team].name} ${T.season}`;
+    const drawnCount = res.players.filter((p) => p.drawn).length;
+    $("teams-caption").textContent = `${T.mode === "playoffs" ? `playoff top ${M.rotation_size} by minutes` : "regular season rotation"} · ${drawnCount} shapes`;
+    $("teams-panel").innerHTML = statsHTML(res, { pool: pool.coverage, label: "team-seasons" }, shape, pool.depth)
+      + reachHTML(res, slots, gaps, "the team's", shape);
+    teamsList.opts.title = T.mode === "playoffs" ? `Playoff top ${M.rotation_size}` : "Players";
+    teamsList.set(res, slots);
+    const ringNote = S.scale === "rank" ? "Dots on each axis mark the top 5, 20 and 50." : "Dots on each axis mark the 25th, 50th and 75th percentiles.";
+    $("teams-hint").textContent = `Drag to turn it. Hover a player in the list to light up his shape; tap for his numbers.${teamsStage.outline ? " The bold outline is the team shape: the whole rotation, weighted by minutes." : ""} ${ringNote}`;
+    teamsStage.draw();
+    store.set("rf3d-teams", JSON.stringify(T));
+  }
+
+  /* ---- Compare ---------------------------------------------------------------------------- */
+  const C = { a: { season: LATEST, team: null }, b: { season: LATEST, team: null }, mode: "regular" };
+  const compareStages = { a: makeStage("compare-a-stage"), b: makeStage("compare-b-stage") };
+  function renderCompare() {
+    for (const side of ["a", "b"]) {
+      const st = C[side];
+      fillSelect($(`compare-${side}-season`), seasonItems(), st.season);
+      fillSelect($(`compare-${side}-team`), teamItems(st.season), st.team);
+      st.team = $(`compare-${side}-team`).value;
+    }
+    const po = hasPlayoffs(C.a.season, C.a.team) && hasPlayoffs(C.b.season, C.b.team);
+    if (!po && C.mode === "playoffs") C.mode = "regular";
+    $("compare-mode-playoffs").disabled = !po;
+    $("compare-mode-regular").setAttribute("aria-pressed", String(C.mode === "regular"));
+    $("compare-mode-playoffs").setAttribute("aria-pressed", String(C.mode === "playoffs"));
+    const out = {};
+    for (const side of ["a", "b"]) {
+      const st = C[side];
+      const res = scoreTeam(st.season, st.team, C.mode);
+      const pool = teamPool(C.mode, missingSkills(st.season).join());
+      const shape = shapeOf(teamValues(st.season, st.team, C.mode), pool);
+      const stage = compareStages[side];
+      stage.view = viewOf(res, teamSlots(res, st.season, st.team));
+      stage.outline = shape && $("compare-outline").checked ? shape.r : null;
+      stage.n = nOf(st.season);
+      stage.draw();
+      $(`compare-${side}-title`).textContent = DATA.teams[st.season][st.team].name;
+      $(`compare-${side}-caption`).textContent = `${st.season} · ${C.mode === "playoffs" ? `playoff top ${M.rotation_size}` : "regular season"}`;
+      out[side] = { res, pool, shape };
+    }
+    const A = `${C.a.team} ${yy(C.a.season)}`;
+    const B = `${C.b.team} ${yy(C.b.season)}`;
+    const lead = (va, vb, higher) => (higher == null || va === vb ? ["", ""] : (va > vb) === higher ? ["lead", ""] : ["", "lead"]);
+    const row = (name, va, vb, f, higher) => {
+      const [la, lb] = lead(va, vb, higher);
+      return `<tr><th scope="row">${esc(name)}</th><td class="${la}">${f(va)}</td><td class="${lb}">${f(vb)}</td></tr>`;
+    };
+    const pctFmt = (v) => (v == null ? "–" : `${Math.round(v)}%`);
+    const rank = (side) => RF.pctAgainst(out[side].pool.coverage, out[side].res.coverage);
+    const depthOf = (side) => (out[side].shape ? out[side].shape.depth : null);
+    const depthRank = (side) => (out[side].shape ? RF.pctAgainst(out[side].pool.depth, out[side].shape.depth) : null);
+    const rows = [
+      row("Coverage", out.a.res.coverage, out.b.res.coverage, share, true),
+      row("Coverage: better than", rank("a"), rank("b"), pctFmt, true),
+      row("Depth (team shape)", depthOf("a"), depthOf("b"), (v) => (v == null ? "–" : share(v)), true),
+      row("Depth: better than", depthRank("a"), depthRank("b"), pctFmt, true),
+      row("Overlap", out.a.res.overlap, out.b.res.overlap, (v) => v.toFixed(2), null),
+    ].join("");
+    const teamPct = (side, i) => (out[side].shape ? out[side].shape.pct[i] || 0 : 0);
+    const dumbs = ORDER.map((skill, i) => {
+      const va = teamPct("a", i);
+      const vb = teamPct("b", i);
+      return `<div><div class="dumb-head"><b>${esc(SK.labels[skill])}</b><span>${esc(A)} ${fmt(va)} · ${esc(B)} ${fmt(vb)}</span></div>
+        <div class="dumb-track"><span class="dumb-span" style="left:${Math.min(va, vb)}%;width:${Math.abs(va - vb)}%"></span>
+        <span class="dumb-dot b" style="left:${vb}%"></span><span class="dumb-dot" style="left:${va}%"></span></div></div>`;
+    }).join("");
+    $("compare-versus").innerHTML = `
+      <div class="table-wrap"><table><thead><tr><th scope="col"></th><th scope="col">${esc(A)}</th><th scope="col">${esc(B)}</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="card"><div class="chart-title"><h2 style="font-size:20px">Team shape by skill</h2>
+        <span class="legend-ab"><span><i class="a"></i>${esc(A)}</span><span><i></i>${esc(B)}</span></span></div>
+        <div class="dumbbells">${dumbs}</div>
+        <p class="muted" style="margin:10px 0 0;font-size:13px">The whole rotation's skill, weighted by minutes, as a percentile among ${out.a.pool.coverage.length} team-seasons; 0 to 100 left to right.</p></div>`;
+    store.set("rf3d-compare", JSON.stringify(C));
+  }
+
+  /* ---- Builder ---------------------------------------------------------------------------- */
+  const SEARCH = [];
+  for (const s of SEASONS) {
+    for (const p of INDEX[s].values()) {
+      const e = entry(s, p.pid, p.min);
+      if (p.min >= 200 && complete(e)) SEARCH.push({ ...e, key2: norm(p.name) });
+    }
+  }
+  let lineup = [];  // keys "pid|season"
+  const fromKey = (k) => { const [pid, season] = k.split("|"); return INDEX[season] && INDEX[season].get(Number(pid)) ? { pid: Number(pid), season } : null; };
+  const builderStage = makeStage("builder-stage");
+  const builderList = makeList("builder-players", builderStage, { title: "Your five", sub: (p) => [p.pos, `${p.team} ${p.season}`].filter(Boolean).join(" · "), empty: "Add players on the left, or start from a team's top five." });
+  const skillLine = (e) => ORDER.map((s, i) => `${shortOf(s)} ${fmt(e.pct[i])}`).join(" · ");
+
+  function renderBuilder() {
+    fillSelect($("builder-season"), seasonItems(), $("builder-season").value || LATEST);
+    fillSelect($("builder-team"), teamItems($("builder-season").value), $("builder-team").value);
+    const picks = lineup.map(fromKey).filter(Boolean);
+    const items = [];
+    for (let i = 0; i < 5; i++) {
+      const p = picks[i];
+      if (!p) { items.push(`<li class="slot empty"><span></span><span class="who">Open spot</span><span></span></li>`); continue; }
+      const e = entry(p.season, p.pid, 1);
+      items.push(`<li class="slot"><span class="swatch c${i + 1}" style="margin:0"></span>
+        <span class="who"><b>${esc(e.name)}</b><span>${esc(e.team)} ${esc(e.season)} · ${skillLine(e)}</span></span>
+        <button class="x" data-remove="${i}" aria-label="Remove ${esc(e.name)}">×</button></li>`);
+    }
+    $("builder-slots").innerHTML = items.join("");
+    const res = scoreLineup(picks);
+    const slots = new Map(res.players.map((p, i) => [p.key, i]));
+    const tpool = teamPool("regular", missingSkills(LATEST).join());
+    const shape = picks.length ? shapeOf(lineupValues(picks), tpool) : null;
+    keepFocus(builderStage, res);
+    builderStage.view = viewOf(res, slots);
+    builderStage.outline = shape ? shape.r : null;
+    builderStage.draw();
+    $("builder-caption").textContent = `${picks.length} of 5 picked`;
+    const pool = picks.length === 5 ? fivesPool() : [];
+    $("builder-panel").innerHTML = statsHTML(res, { pool, label: "real starting fives" }, shape, tpool.depth, "pick a player")
+      + reachHTML(res, slots, [], "your lineup's", shape);
+    builderList.set(res, slots);
+    store.set("rf3d-lineup", JSON.stringify(lineup));
+    renderResults();
+  }
+
+  function renderResults() {
+    const q = norm($("builder-search").value);
+    const list = $("builder-results");
+    if (!q) { list.innerHTML = ""; return; }
+    const words = q.split(" ");
+    const hits = SEARCH.filter((p) => words.every((w) => p.key2.includes(w)))
+      .sort((a, b) => (b.key2.startsWith(q) - a.key2.startsWith(q)) || b.season.localeCompare(a.season) || b.min - a.min)
+      .slice(0, 14);
+    if (!hits.length) { list.innerHTML = `<li class="muted" style="padding:6px 8px">No player with 200+ minutes and all six skills matches "${esc($("builder-search").value)}".</li>`; return; }
+    const full = lineup.length >= 5;
+    list.innerHTML = hits.map((p) => {
+      const taken = lineup.includes(p.key);
+      return `<li class="result"><span><b>${esc(p.name)}</b> <span class="meta">${esc(p.team)} ${esc(p.season)} · ${mins(p.min)} min</span><br>
+        <span class="meta">${skillLine(p)}</span></span>
+        <button class="btn${taken || full ? "" : " primary"}" data-add="${esc(p.key)}" ${taken || full ? "disabled" : ""}>${taken ? "Added" : full ? "Full" : "Add"}</button></li>`;
+    }).join("");
+  }
+  const loadTeamTop5 = (season, abbr) => { lineup = topFive(season, abbr).map((e) => e.key); };
+
+  /* ---- Cap game: same deck, rules and daily deal as the 2D page; scored in 3D ---------------- */
+  const SPOTS = 5;
+  const REROLLS = 3;
+  const GAME_VERSION = 1;  // saved games from older rules start over
+  const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
+  const money = (v, d = 1) => `$${(v / 1e6).toFixed(d)}M`;
+  const DECK = new Map();  // team -> players with a contract and a full 3D shape, highest salary first
+  let BY_POS = false;      // one player per position (any order) when the deck has positions
+  const FLOORS = {};       // cap kept in hand per open spot, by position (see RF.signingFloor)
+  if (GAME) {
+    const usable = GAME.deck.filter(([pid]) => complete(entry(GAME.stats_season, pid, 1)));
+    const known = usable.filter((d) => POSITIONS.includes(d[3]));
+    BY_POS = known.length >= 0.9 * usable.length;  // a player with no position sits out
+    for (const [pid, salary, team, pos] of BY_POS ? known : usable) {
+      const e = entry(GAME.stats_season, pid, 1);
+      if (!DECK.has(team)) DECK.set(team, []);
+      DECK.get(team).push({ ...e, salary, dealt: team, pos: pos || e.pos });
+    }
+    const salaries = (keep) => [...DECK.values()].map((list) => list.filter(keep).map((q) => q.salary));
+    if (BY_POS) for (const pos of POSITIONS) FLOORS[pos] = RF.signingFloor(salaries((q) => q.pos === pos), SPOTS);
+    else FLOORS.any = RF.signingFloor(salaries(() => true), SPOTS);
+  }
+  const slotOfPos = (q) => (BY_POS ? q.pos : "any");
+  /* Spots still to fill: the positions nobody has signed for yet (or plain spots without positions). */
+  const openSlots = () => (BY_POS ? POSITIONS.filter((pos) => !G.picks.some((p) => p.pos === pos))
+    : Array(SPOTS - G.picks.length).fill("any"));
+  const isOpen = (q) => openSlots().includes(slotOfPos(q));
+  /* What signing q must leave in hand: the floors of the other open spots. */
+  function reserveFor(q) {
+    const open = openSlots();
+    const i = open.indexOf(slotOfPos(q));
+    return i < 0 ? Infinity : open.reduce((t, slot, j) => t + (j === i ? 0 : FLOORS[slot]), 0);
+  }
+  const signable = (q, left) => isOpen(q) && RF.canAfford(q.salary, left, reserveFor(q));
+  const DECK_TEAMS = [...DECK.keys()].sort();
+  const teamName = (abbr) => ((DATA.teams[GAME.stats_season] || {})[abbr] || { name: abbr }).name;
+  const todayKey = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  let G = null;
+  const gameStage = GAME ? makeStage("game-stage") : null;
+  const gameInfo = { salary: new Map(), pos: new Map() };
+  const gameList = GAME ? makeList("game-players", gameStage, {
+    title: "Your signings", empty: "Nobody signed yet: pick someone from the team you're dealt.",
+    sub: (p) => [gameInfo.pos.get(p.key), gameInfo.salary.has(p.key) ? money(gameInfo.salary.get(p.key)) : ""].filter(Boolean).join(" · "),
+  }) : null;
+
+  function newGame(mode) {
+    const date = todayKey();
+    const seed = mode === "daily" ? RF.hashSeed(`${GAME.contract_season}|${date}`) : Math.floor(Math.random() * 2 ** 32);
+    G = { v: GAME_VERSION, mode, date, seed, draws: 0, current: null, picks: [], rerolls: REROLLS, done: false };
+    deal();
+  }
+  /* Next team in this game's order that you haven't signed from, isn't on the table now, and has
+   * someone you can sign. Returns false if there's none. */
+  function deal() {
+    const order = RF.dealOrder(DECK_TEAMS, G.seed);
+    const used = new Set(G.picks.map((p) => p.team));
+    const left = GAME.cap - spent();
+    const fits = (t) => (DECK.get(t) || []).some((q) => signable(q, left));
+    for (let k = 0; k < order.length; k++) {
+      const t = order[G.draws % order.length];
+      G.draws += 1;
+      if (!used.has(t) && t !== G.current && fits(t)) { G.current = t; return true; }
+    }
+    return false;
+  }
+  const spent = () => G.picks.reduce((s, p) => s + p.salary, 0);
+  const gamePicks = () => G.picks.map((p) => ({ pid: p.pid, season: GAME.stats_season }));
+
+  const bestKey = () => `rf3d-game-best-${S.scale}`;  // scores on different scales don't compare
+  function bestScores() {
+    try { return JSON.parse(store.get(bestKey()) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function recordBest(score) {
+    const best = bestScores();
+    if (G.mode === "daily") {
+      if (!best.daily || best.daily.date !== G.date || score > best.daily.score) best.daily = { date: G.date, score };
+    } else if (!(best.free >= score)) best.free = score;
+    store.set(bestKey(), JSON.stringify(best));
+  }
+  function shareText(res) {
+    const head = G.mode === "daily" ? `Daily deal ${G.date}` : "Free play";
+    const byPos = (a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos);
+    const names = (BY_POS ? G.picks.slice().sort(byPos) : G.picks)
+      .map((p) => `${BY_POS ? `${p.pos} ` : ""}${INDEX[GAME.stats_season].get(p.pid).name} ${money(p.salary)}`).join(" · ");
+    return `Roster Fit 3D cap game · ${head}\nCoverage ${(res.coverage * 100).toFixed(1)}% (${S.scale} scale) · ${money(spent())} of ${money(GAME.cap, 2)} cap\n${names}`;
+  }
+
+  /* Small fixed-angle drawings for the candidates: him in color over your signings in gray. */
+  let glyphJobs = [];
+  function drawGlyphs() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    for (const { canvas, view } of glyphJobs) {
+      if (!canvas.isConnected) continue;
+      const W = canvas.clientWidth || 48;
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(W * dpr);
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      paint(ctx, W, GLYPH_CAM, view, { small: true });
+    }
+  }
+
+  function renderGame() {
+    if (!GAME) return;
+    $("game-mode-daily").setAttribute("aria-pressed", String(G.mode === "daily"));
+    $("game-mode-free").setAttribute("aria-pressed", String(G.mode === "free"));
+    const picks = gamePicks();
+    const res = scoreLineup(picks);
+    const left = GAME.cap - spent();
+    const round = G.picks.length + 1;
+    const nameOf = (pid) => INDEX[GAME.stats_season].get(pid).name;
+
+    const segs = G.picks.map((p, i) => `<span class="c${i + 1}" style="width:${(100 * p.salary / GAME.cap).toFixed(2)}%" title="${esc(nameOf(p.pid))} ${money(p.salary)}"></span>`).join("");
+    const pips = Array.from({ length: REROLLS }, (_, i) => `<i class="${i < G.rerolls ? "on" : ""}"></i>`).join("");
+    let html = `<div class="card"><div class="budget-head"><span class="stat-label">Cap space</span><b>${money(left, 2)}</b>
+        <span class="muted">left of ${money(GAME.cap, 2)}</span></div>
+      <div class="budget-bar" role="img" aria-label="${money(spent())} of ${money(GAME.cap, 2)} spent">${segs}</div>
+      <div class="budget-meta"><span>${G.done ? "All five signed" : `Pick ${round} of ${SPOTS}${BY_POS ? ` · open: ${openSlots().join(", ")}` : ""}`}</span>
+        <span class="pips" aria-label="${G.rerolls} rerolls left">Rerolls${pips}</span></div>
+      ${BY_POS ? `<ol class="pos-strip" aria-label="Your lineup by position">${POSITIONS.map((pos) => {
+        const k = G.picks.findIndex((p) => p.pos === pos);
+        const name = k >= 0 ? nameOf(G.picks[k].pid) : "";
+        const lastName = name ? (name.split(" ").slice(1).join(" ") || name) : "";
+        return `<li class="${k >= 0 ? `filled c${k + 1}` : "open"}"><b>${pos}</b><span>${k >= 0 ? esc(lastName) : "open"}</span></li>`;
+      }).join("")}</ol>` : ""}</div>`;
+
+    glyphJobs = [];
+    const mine = res.players.filter((p) => p.drawn).map((p) => ({ key: p.key, r: p.r, ghost: true }));
+    if (!G.done) {
+      const cands = DECK.get(G.current) || [];
+      const base = res.coverage;
+      let any = false;
+      const rows = cands.map((p) => {
+        const open = isOpen(p);
+        const ok = signable(p, left);
+        any = any || ok;
+        const withHim = scoreLineup(picks.concat([{ pid: p.pid, season: GAME.stats_season }]));
+        const him = withHim.players[withHim.players.length - 1];
+        glyphJobs.push({ id: `glyph-${p.pid}`, view: mine.concat([{ key: him.key, r: him.r, slot: round - 1 }]) });
+        const moved = p.team && !p.team.split("/").includes(G.current) ? ` · ${yy(GAME.stats_season)} with ${esc(p.team)}` : "";
+        const label = ok ? "Sign" : open ? "Over" : "Filled";
+        return `<li class="cand${ok ? "" : open ? " over" : " taken"}"><canvas class="glyph" id="glyph-${p.pid}" aria-hidden="true"></canvas>
+          <span class="who"><b>${BY_POS ? `<span class="pos-badge">${esc(p.pos)}</span>` : ""}${esc(p.name)}</b><span class="meta">${skillLine(p)}${moved}</span></span>
+          <span class="price"><b>${money(p.salary)}</b> <span class="meta">${Math.round(100 * p.salary / GAME.cap)}%</span>
+            <span class="gain">+${((withHim.coverage - base) * 100).toFixed(1)} pts</span></span>
+          <button class="btn${ok ? " primary" : ""}" data-sign="${p.pid}" ${ok ? "" : `disabled title="${open ? "Signing him would leave too little cap for your other open spots" : `You already have a ${esc(p.pos)}`}"`}>${label}</button></li>`;
+      }).join("");
+      const stuck = any ? "" : `<p class="notice">Nobody here fits your cap space and open spots.
+        <button class="btn" id="game-redeal" style="margin-left:6px">Deal another team (free)</button></p>`;
+      html += `<div class="card"><div class="deal-head"><div><span class="stat-label">Pick ${round} of ${SPOTS} · you're dealt</span>
+          <h2>${esc(teamName(G.current))}</h2></div>
+          <button class="btn" id="game-reroll" ${G.rerolls ? "" : "disabled"}>Reroll team (${G.rerolls} left)</button></div>
+        ${stuck}<ul class="cands">${rows}</ul></div>`;
+    } else {
+      const best = bestScores();
+      const bestLine = G.mode === "daily"
+        ? (best.daily && best.daily.date === G.date ? `Your best today on this scale: ${(best.daily.score * 100).toFixed(1)}%.` : "")
+        : (best.free != null ? `Your best in free play on this scale: ${(best.free * 100).toFixed(1)}%.` : "");
+      const pct = RF.pctAgainst(fivesPool(), res.coverage);
+      html += `<div class="card"><span class="stat-label">${G.mode === "daily" ? `Daily deal · ${esc(G.date)}` : "Free play"} · final</span>
+        <div class="final">${(res.coverage * 100).toFixed(1)}%</div>
+        <p style="margin:2px 0 8px">of the full shape on the ${esc(S.scale)} scale${pct != null ? `, better than ${Math.round(pct)}% of real starting fives` : ""}, with ${money(spent())} of the ${money(GAME.cap, 2)} cap. ${esc(bestLine)}</p>
+        <div class="row"><button class="btn primary" id="game-copy">Copy result</button><button class="btn" id="game-again">Play again</button></div>
+        <textarea class="share-text" id="game-share" readonly hidden></textarea></div>`;
+    }
+    $("game-side").innerHTML = html;
+    for (const job of glyphJobs) job.canvas = $(job.id);
+    drawGlyphs();
+
+    const slots = new Map(res.players.map((p, i) => [p.key, i]));
+    const tpool = teamPool("regular", missingSkills(GAME.stats_season).join());
+    const shape = G.done ? shapeOf(lineupValues(picks), tpool) : null;  // like the 2D game: once all five are in
+    keepFocus(gameStage, res);
+    gameStage.view = viewOf(res, slots);
+    gameStage.outline = shape ? shape.r : null;
+    gameStage.draw();
+    $("game-caption").textContent = `${G.picks.length} of ${SPOTS} signed`;
+    gameInfo.salary = new Map(G.picks.map((p) => [`${p.pid}|${GAME.stats_season}`, p.salary]));
+    gameInfo.pos = new Map(G.picks.map((p) => [`${p.pid}|${GAME.stats_season}`, BY_POS ? p.pos : null]));
+    gameList.set(res, slots);
+    $("game-panel").innerHTML = statsHTML(res, { pool: G.done ? fivesPool() : [], label: "real starting fives" }, shape, tpool.depth, "the team shape shows once all five are signed")
+      + (G.picks.length ? reachHTML(res, slots, [], "your", shape) : "");
+    store.set("rf3d-game", JSON.stringify(G));
+  }
+
+  function restoreGame() {
+    try {
+      const g = JSON.parse(store.get("rf3d-game") || "null");
+      const valid = g && g.v === GAME_VERSION && Array.isArray(g.picks)
+        && g.picks.every((p) => (DECK.get(p.team) || []).some((q) => q.pid === p.pid && (!BY_POS || q.pos === p.pos)))
+        && (!BY_POS || new Set(g.picks.map((p) => p.pos)).size === g.picks.length)
+        && DECK.has(g.current) && (g.mode === "free" || g.date === todayKey());
+      if (valid) { G = g; return; }
+    } catch (e) { /* ignore */ }
+    newGame("daily");
+  }
+
+  if (GAME && DECK.size) {
+    $("tab-game").hidden = false;
+    $("game-rules").textContent = (BY_POS
+      ? `Sign a starting five, one player per position (PG, SG, SF, PF, C), in any order. Each round deals you a team's `
+        + `${GAME.contract_season} roster: sign anyone at a position you haven't filled. `
+      : `Five rounds. Each round deals you one team's ${GAME.contract_season} roster: sign one player from it. `)
+      + `Stay under the ${money(GAME.cap, 2)} salary cap; you get ${REROLLS} rerolls a game. Score: how much of the full 3D shape your five fill. `
+      + `The daily deal is the same for everyone today, and the same teams as the 2D page's.`;
+    $("game-foot").innerHTML = `Salaries: ${esc(GAME.contract_season)} contracts from <a href="${esc(GAME.source_url)}" target="_blank" rel="noopener">${esc(GAME.source)}</a>. `
+      + `Shapes: ${esc(GAME.stats_season)} stats for players with ${mins(GAME.min_minutes)}+ minutes and all six skills. `
+      + `Cap: ${money(GAME.cap, 3)}, the NBA's ${esc(GAME.contract_season)} salary cap.`
+      + (BY_POS ? ` Positions: each player's ${esc(GAME.stats_season)} position in LEBRON.` : "");
+    $("game-mode-daily").addEventListener("click", () => { if (G.mode !== "daily") { newGame("daily"); renderGame(); } });
+    $("game-mode-free").addEventListener("click", () => { if (G.mode !== "free") { newGame("free"); renderGame(); } });
+    $("game-new").addEventListener("click", () => { newGame(G.mode); renderGame(); });
+    $("game-side").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b || G == null) return;
+      if (b.dataset.sign) {
+        const p = (DECK.get(G.current) || []).find((q) => q.pid === Number(b.dataset.sign));
+        if (!p || !signable(p, GAME.cap - spent())) return;
+        G.picks.push({ pid: p.pid, salary: p.salary, team: G.current, pos: p.pos });
+        if (G.picks.length >= SPOTS) {
+          G.done = true;
+          recordBest(scoreLineup(gamePicks()).coverage);
+        } else deal();
+      } else if (b.id === "game-reroll" && G.rerolls > 0) {
+        if (deal()) G.rerolls -= 1;  // no other team fits: keep the reroll
+      } else if (b.id === "game-redeal") {
+        deal();
+      } else if (b.id === "game-again") {
+        newGame(G.mode);
+      } else if (b.id === "game-copy") {
+        const text = shareText(scoreLineup(gamePicks()));
+        const box = $("game-share");
+        const fallback = () => { box.hidden = false; box.value = text; box.select(); b.textContent = "Copy the text below"; };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => { b.textContent = "Copied"; }, fallback);
+        } else fallback();
+        return;
+      } else return;
+      renderGame();
+    });
+  }
+
+  /* ---- tabs, events, start ---------------------------------------------------------------- */
+  const VIEWS = GAME && DECK.size ? ["teams", "compare", "builder", "game"] : ["teams", "compare", "builder"];
+  function show(view) {
+    if (!VIEWS.includes(view)) view = "teams";
+    for (const v of VIEWS) {
+      $(`view-${v}`).hidden = v !== view;
+      $(`tab-${v}`).setAttribute("aria-selected", String(v === view));
+    }
+    store.set("rf3d-view", view);
+    drawAll();
+    if (view === "game") drawGlyphs();
+  }
+  for (const v of VIEWS) $(`tab-${v}`).addEventListener("click", () => { show(v); history.replaceState(null, "", `#${v}`); });
+
+  $("teams-season").addEventListener("change", (e) => { T.season = e.target.value; teamsStage.focus = null; renderTeams(); });
+  $("teams-team").addEventListener("change", (e) => { T.team = e.target.value; teamsStage.focus = null; renderTeams(); });
+  $("teams-mode-regular").addEventListener("click", () => { T.mode = "regular"; renderTeams(); });
+  $("teams-mode-playoffs").addEventListener("click", () => { T.mode = "playoffs"; renderTeams(); });
+  $("teams-outline").addEventListener("change", renderTeams);
+  $("compare-outline").addEventListener("change", renderCompare);
+  for (const side of ["a", "b"]) {
+    $(`compare-${side}-season`).addEventListener("change", (e) => { C[side].season = e.target.value; renderCompare(); });
+    $(`compare-${side}-team`).addEventListener("change", (e) => { C[side].team = e.target.value; renderCompare(); });
+  }
+  $("compare-mode-regular").addEventListener("click", () => { C.mode = "regular"; renderCompare(); });
+  $("compare-mode-playoffs").addEventListener("click", () => { C.mode = "playoffs"; renderCompare(); });
+  $("builder-search").addEventListener("input", renderResults);
+  $("builder-results").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-add]");
+    if (!b || lineup.length >= 5 || lineup.includes(b.dataset.add)) return;
+    lineup.push(b.dataset.add);
+    renderBuilder();
   });
-  $("table").addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
-    const tr = e.target.closest("tr[data-pid]");
-    if (!tr) return;
-    e.preventDefault();
-    tr.click();
+  $("builder-slots").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-remove]");
+    if (!b) return;
+    lineup.splice(Number(b.dataset.remove), 1);
+    renderBuilder();
   });
-
-  /* ---- controls ---- */
-  const seasonSel = $("season");
-  const teamSel = $("team");
-  seasonSel.replaceChildren(...SEASONS.slice().reverse().map((s) => new Option(s, s)));
-  seasonSel.value = state.season;
-  function fillTeams() {
-    const list = teamsIn(state.season);
-    teamSel.replaceChildren(...list.map((t) => new Option(t.name === t.abbr ? t.abbr : `${t.name} (${t.abbr})`, t.abbr)));
-    const abbrs = list.map((t) => t.abbr);
-    if (!abbrs.includes(state.team)) state.team = ["DEM", "NYK", "OKC", "BOS"].find((a) => abbrs.includes(a)) || abbrs[0];
-    teamSel.value = state.team;
-  }
-  function syncMode() {
-    const po = hasPlayoffs(state.season, state.team);
-    if (!po && state.mode === "playoffs") state.mode = "regular";
-    $("mode-playoffs").disabled = !po;
-    $("mode-playoffs").title = po ? "" : "Didn't make the playoffs";
-    $("mode-regular").setAttribute("aria-pressed", String(state.mode === "regular"));
-    $("mode-playoffs").setAttribute("aria-pressed", String(state.mode === "playoffs"));
-  }
-  function syncScale() {
-    $("scale-percentile").setAttribute("aria-pressed", String(state.scale === "percentile"));
-    $("scale-rank").setAttribute("aria-pressed", String(state.scale === "rank"));
-  }
-  seasonSel.addEventListener("change", () => { state.season = seasonSel.value; state.focus = null; fillTeams(); syncMode(); render(); });
-  teamSel.addEventListener("change", () => { state.team = teamSel.value; state.focus = null; syncMode(); render(); });
-  $("mode-regular").addEventListener("click", () => { state.mode = "regular"; syncMode(); render(); });
-  $("mode-playoffs").addEventListener("click", () => { state.mode = "playoffs"; syncMode(); render(); });
-  for (const sc of ["percentile", "rank"]) {
-    $(`scale-${sc}`).addEventListener("click", () => { state.scale = sc; store.set("rf3d-scale", sc); syncScale(); render(); });
-  }
+  $("builder-season").addEventListener("change", () => renderBuilder());
+  $("builder-load").addEventListener("click", () => { loadTeamTop5($("builder-season").value, $("builder-team").value); renderBuilder(); });
+  $("builder-clear").addEventListener("click", () => { lineup = []; renderBuilder(); });
 
   /* ---- glossary + sources ---- */
   const COMPONENT_NAMES = {
@@ -583,29 +1391,70 @@ td.hi { font-weight: 700; }
     return Object.entries(w).map(([c, v]) => `${COMPONENT_NAMES[c] || c} ${Math.round((100 * v) / total)}%`).join(", ");
   };
   const SOURCES = M.impact_sources || [];
-  const gloss = [
-    ["Axes", SK.pairs.map((p, i) => `${i + 1}: ${SK.labels[p[0]]} and ${SK.labels[p[1]]}`).join("; ") +
-      ". The two ends of an axis are skills that can stand in for each other; the three axes are things every lineup needs."],
-    ["Volume", "A shape's volume share is (one end + the other end) on each axis, multiplied across the three axes, divided by 8. A player strong on all three axes fills far more than one great at a single thing."],
-    ...ORDER.map((s) => [SK.labels[s], `Per 100 possessions where it's a count: ${mixOf(s)}. Each piece is ranked among the season's qualified players, then combined into a league percentile.`]),
-    ["Shape size", `Set by overall impact (${SOURCES.map((x) => x.name).join(" + ") || "plus-minus"}, offense plus defense) as a league percentile. The lowest-impact player's shape is ${Math.round(SK.size_floor * 100)}% as wide as the best's. On a team, volume also follows minutes played.`],
-    ["Scale", "Percentile (the default here) puts each vertex at the player's percentile. Rank uses distance by rank: the best player reaches the end, and every halving of the rank moves the same step outward, so the top few stand out. In 3D that shrink is cubed, so on Rank only real standouts have visible volume."],
-    ["Coverage", "Share of the full shape the players fill together: does someone on the team reach each direction? Ranked against every team-season in the data with the same rotation and scale."],
-    ["Overlap", "Total volume of the shapes minus the volume they fill together, in full shapes. Big overlap means players doing the same jobs."],
-    ["Prototype", "Skills are regular-season numbers, in the playoff view too. A player needs all six skills to get a shape; a skill missing for a whole season is drawn at 0 until its data is downloaded."],
-  ];
-  $("glossary").innerHTML = gloss.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("");
+  function renderGlossary() {
+    const gloss = [
+      ["Axes", SK.pairs.map((p, i) => `${i + 1}: ${SK.labels[p[0]]} and ${SK.labels[p[1]]}`).join("; ") +
+        ". The two ends of an axis are skills that can stand in for each other; the three axes are things every lineup needs."],
+      ["Volume", "A shape's volume share is (one end + the other end) on each axis, multiplied across the three axes, divided by 8. A player strong on all three axes fills far more than one great at a single thing."],
+      ...ORDER.map((s) => [SK.labels[s], `Per 100 possessions where it's a count: ${mixOf(s)}. Each piece is ranked among the season's qualified players, then combined into a league percentile.`]),
+      ["Shape size", `Set by overall impact (${SOURCES.map((x) => x.name).join(" + ") || "plus-minus"}, offense plus defense) as a league percentile. The lowest-impact player's shape is ${Math.round(SK.size_floor * 100)}% as wide as the best's. On a team, volume also follows minutes played.`],
+      ["Scale", `Percentile (the default here) puts each vertex at the player's percentile. Rank uses distance by rank: the best player reaches the end, and every halving of the rank moves the same step outward, so the top few stand out. In 3D that shrink is cubed, so on Rank only real standouts have visible volume.${S.scale === "rank" ? " (Showing now: Rank.)" : ""}`],
+      ["Coverage", "Share of the full shape the players fill together: does someone on the team reach each direction? Teams are ranked against every team-season with the same rotation and scale."],
+      ["Team shape and depth", "The bold outline, in the text color: how much of each skill the whole rotation provides. Each player's skill becomes a rank-based score (below average counts 0, since a player who can't do something doesn't take it away), weighted by minutes so the weights add to 5, and the team's total is ranked against every team-season. Depth is the share of the full shape inside it. Same rules as the 2D depth outline."],
+      ["Overlap", "Total volume of the shapes minus the volume they fill together, in full shapes. Big overlap means players doing the same jobs."],
+      ["Builder and cap game", "Five starters with equal minutes, so each shape's size comes from impact alone. Their coverage is ranked against every real team's top five by regular-season minutes; their team shape (each player weighted 1, so the weights add to 5 like a team's) against every team-season."],
+      ["Prototype", "Skills are regular-season numbers, in the playoff view too. A player needs all six skills to get a shape."],
+    ];
+    $("glossary").innerHTML = gloss.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("");
+  }
   const srcLinks = SOURCES.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name === "LEBRON" ? "LEBRON (BBall Index)" : x.name)}</a>`).join(" and ");
-  $("sources").innerHTML = `Data: player and tracking stats from <a href="https://www.nba.com/stats" target="_blank" rel="noopener">NBA.com</a> via nba_api${srcLinks ? `; shape size from ${srcLinks}` : ""}. Seasons ${esc(SEASONS[0])} to ${esc(LATEST)}, built ${esc(M.generated)}. A personal project, not affiliated with the NBA.`;
+  $("sources").innerHTML = `Data: player and tracking stats from <a href="https://www.nba.com/stats" target="_blank" rel="noopener">NBA.com</a> via nba_api${srcLinks ? `; shape size from ${srcLinks}` : ""}${GAME ? `; contracts from <a href="${esc(GAME.source_url)}" target="_blank" rel="noopener">${esc(GAME.source)}</a>` : ""}. Seasons ${esc(SEASONS[0])} to ${esc(LATEST)}, built ${esc(M.generated)}. A personal project, not affiliated with the NBA.`;
   $("brand-sub").textContent = `Prototype · ${SEASONS[0]} to ${LATEST}`;
   $("synthetic-notice").hidden = !M.synthetic;
 
-  fillTeams();
-  syncMode();
-  syncScale();
-  $("spin").setAttribute("aria-pressed", String(state.spinning));
-  $("spin").textContent = state.spinning ? "Spinning" : "Spin";
-  render();
-  if (state.spinning) requestAnimationFrame(tick);
+  // restore the viewer's last state where it still exists
+  try {
+    const t = JSON.parse(store.get("rf3d-teams") || "null");
+    if (t && DATA.teams[t.season] && DATA.teams[t.season][t.team]) Object.assign(T, t);
+  } catch (e) { /* ignore */ }
+  if (!T.team) T.team = defaultTeam(T.season, ["DEM", "NYK", "OKC", "BOS"]);
+  try {
+    const c = JSON.parse(store.get("rf3d-compare") || "null");
+    if (c && ["a", "b"].every((s) => c[s] && DATA.teams[c[s].season] && DATA.teams[c[s].season][c[s].team])) Object.assign(C, c);
+  } catch (e) { /* ignore */ }
+  if (!C.a.team) C.a.team = defaultTeam(LATEST, ["DEM", "NYK"]);
+  if (!C.b.team) C.b.team = defaultTeam(LATEST, ["SAS", teamsIn(LATEST)[1] && teamsIn(LATEST)[1].abbr]);
+  try {
+    const l = JSON.parse(store.get("rf3d-lineup") || "null");
+    if (Array.isArray(l)) lineup = l.filter((k) => fromKey(k)).slice(0, 5);
+  } catch (e) { /* ignore */ }
+  if (!lineup.length) loadTeamTop5(LATEST, T.team);
+  fillSelect($("builder-season"), seasonItems(), LATEST);
+  fillSelect($("builder-team"), teamItems(LATEST), T.team);
+
+  const SCALES = ["percentile", "rank"];
+  function setScale(scale) {
+    S.scale = scale;
+    for (const s of SCALES) $(`scale-${s}`).setAttribute("aria-pressed", String(s === scale));
+  }
+  setScale(S.scale);
+  for (const s of SCALES) {
+    $(`scale-${s}`).addEventListener("click", () => {
+      if (S.scale === s) return;
+      setScale(s);
+      store.set("rf3d-scale", s);
+      renderTeams(); renderCompare(); renderBuilder(); renderGlossary();
+      if (VIEWS.includes("game")) renderGame();
+    });
+  }
+  renderGlossary();
+  renderTeams();
+  renderCompare();
+  renderBuilder();
+  if (VIEWS.includes("game")) { restoreGame(); renderGame(); }
+  syncSpinButtons();
+  const fromHash = location.hash.replace("#", "");
+  show(VIEWS.includes(fromHash) ? fromHash : store.get("rf3d-view") || "teams");
+  if (CAM.spinning) requestAnimationFrame(tick);
 })();
 </script>
