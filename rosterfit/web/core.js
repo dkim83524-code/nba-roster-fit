@@ -443,14 +443,18 @@
     return out;
   }
 
-  /* data.skills.players[season] rows -> {season: Map(pid -> {pct: [6], impact})}. */
+  /* data.skills.players[season] rows -> {season: Map(pid -> {pct: [6], impact, parts})}; parts:
+   * component name -> percentile, when the export has them (component_pct). */
   function skillIndex(data) {
     const out = {};
     const sk = data.skills;
     if (!sk) return out;
+    const names = sk.component_list || [];
     for (const s of Object.keys(sk.players)) {
+      const parts = new Map();
+      for (const r of (sk.component_pct || {})[s] || []) parts.set(r[0], Object.fromEntries(names.map((c, i) => [c, r[i + 1]])));
       const map = new Map();
-      for (const r of sk.players[s]) map.set(r[0], { pct: r.slice(1, 7), impact: r[7] });
+      for (const r of sk.players[s]) map.set(r[0], { pct: r.slice(1, 7), impact: r[7], parts: parts.get(r[0]) || null });
       out[s] = map;
     }
     return out;

@@ -192,10 +192,14 @@ console.log(JSON.stringify({
 def test_3d_export(data, cfg, tmp_path):
     sk = data["skills"]
     assert sk["order"] == cfg.skills.order and len(sk["pairs"]) == 3
+    assert "matchup_difficulty" in sk["component_list"] and "blk_per100" in sk["component_list"]
     for season in data["meta"]["seasons"]:
         assert sk["available"][season] == cfg.skills.order
         rows = sk["players"][season]
         assert len(rows) == len(data["players"][season]) and all(len(r) == 8 for r in rows)
+        parts = sk["component_pct"][season]
+        assert len(parts) == len(rows) and all(len(r) == 1 + len(sk["component_list"]) for r in parts)
+        assert all(v is None or 0 <= v <= 100 for r in parts for v in r[1:])
     json.dumps(sk, allow_nan=False)
     paths = write_web(data, tmp_path)
     page = paths["page_3d"].read_text()

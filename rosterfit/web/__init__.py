@@ -13,6 +13,7 @@ from pathlib import Path
 import pandas as pd
 
 from ..config import CORNERS, Config
+from ..metrics.pool import percentile_against
 from ..sources.contracts import SOURCE_NAME, SOURCE_URL
 from ..sources.names import match_names
 from ..team import PLAYOFF_MODE, REGULAR_MODE, League, select_roster, team_name
@@ -132,10 +133,13 @@ def _r1(x):
 
 
 def skills_block(league: League, cfg: Config) -> dict:
-    """The 3D view's data: per season, [pid, six skill percentiles in cfg.skills.order, impact pct]."""
+    """The 3D view's data: per season, [pid, six skill percentiles in cfg.skills.order, impact pct];
+    and the stats behind the skills, [pid, one percentile per component in component_list] (whole
+    numbers, among the season's qualified players)."""
     sk = cfg.skills
     order = sk.order
-    players, available = {}, {}
+    comp_list = list(dict.fromkeys(c for s in order for c, w in sk.axes[s].items() if w > 0))
+    players, available, comp_pct = {}, {}, {}
     for season in sorted(league.players):
         table = league.players[season]
         cols = [f"skill_{s}_pct" for s in order]
@@ -145,6 +149,12 @@ def skills_block(league: League, cfg: Config) -> dict:
         available[season] = [s for s, c in zip(order, cols) if q[c].notna().any()]
         players[season] = [[int(r.PLAYER_ID)] + [_r1(getattr(r, c)) for c in cols] + [_r1(r.impact_pct)]
                            for r in table.itertuples(index=False)]
+        pcts = []
+        for c in comp_list:
+            col = table.get(f"sk_{c}")
+            pcts.append(percentile_against(col, col[table["qualified"]]) if col is not None else [None] * len(table))
+        comp_pct[season] = [[int(pid)] + [None if v is None or math.isnan(v) else round(float(v)) for v in vals]
+                            for pid, *vals in zip(table["PLAYER_ID"], *pcts)]
     return {
         "order": order,
         "pairs": sk.pairs,
@@ -153,6 +163,8 @@ def skills_block(league: League, cfg: Config) -> dict:
         "size_floor": sk.size_floor,
         "available": available,
         "players": players,
+        "component_list": comp_list,
+        "component_pct": comp_pct,
     }
 
 
