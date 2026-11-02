@@ -88,6 +88,8 @@ select, input[type="search"] { background: var(--surface); border: 1px solid var
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.check { display: inline-flex; align-items: center; gap: 6px; padding-bottom: 8px; color: var(--ink-2); cursor: pointer; }
+.check input { accent-color: var(--accent); }
 .muted { color: var(--muted); }
 
 /* stage + panel */
@@ -123,7 +125,8 @@ canvas.stage.dragging { cursor: grabbing; }
 .bar-row .lab { min-width: 0; line-height: 1.2; }
 .bar-row .lab b { display: block; font-weight: 600; font-size: 14px; }
 .bar-row .lab span { display: block; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bar-track { height: 10px; background: var(--grid); border-radius: 5px; overflow: hidden; }
+.bar-track { position: relative; height: 10px; background: var(--grid); border-radius: 5px; overflow: hidden; }
+.bar-tick { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: var(--ink); border-radius: 1px; }
 .bar-fill { display: block; height: 100%; background: var(--c, var(--ink)); border-radius: 5px; }
 .bar-fill.o { background: var(--other); }
 .bar-val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
@@ -265,6 +268,7 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
           <button class="seg-btn" id="teams-mode-playoffs" aria-pressed="false">Playoff top 8</button>
         </div>
       </div>
+      <label class="check"><input type="checkbox" id="teams-outline" checked> Team shape</label>
     </div>
     <div class="split">
       <figure class="card">
@@ -295,6 +299,7 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
           <button class="seg-btn" id="compare-mode-playoffs" aria-pressed="false">Playoff top 8</button>
         </div>
       </div>
+      <label class="check"><input type="checkbox" id="compare-outline" checked> Team shapes</label>
     </div>
     <div class="duo">
       <figure class="card">
@@ -465,22 +470,44 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
       scale: S.scale, n: nOf(LATEST), sizeFloor: SK.size_floor, minutes: false, minMinutes: null, dirs: DIRS });
   }
 
-  /* What to rank against: every team-season's rotation, or every team's real top five by minutes. */
+  /* A rotation's six team values (minutes-weighted, below average counting 0: RF.teamSkillValues). */
+  function teamValues(season, abbr, mode) {
+    const team = DATA.teams[season] && DATA.teams[season][abbr];
+    const pairs = team ? team[mode] || [] : [];
+    return RF.teamSkillValues(pairs.map(([pid, min]) => entry(season, pid, min)));
+  }
+  const lineupValues = (list) => RF.teamSkillValues(list.map((p) => entry(p.season, p.pid, 1)), { fixedWeight: 1 });
+
+  /* What to rank against: every team-season's rotation (coverage, the six team values, depth), or
+   * every team's real top five by minutes (coverage). */
   const poolCache = new Map();
+  const ascending = (a, b) => a - b;
   function teamPool(mode, gapKey) {
     const key = `team|${mode}|${S.scale}|${gapKey}`;
     if (!poolCache.has(key)) {
-      const out = [];
+      const coverage = [];
+      const values = [];
       for (const season of M.pool_seasons || []) {
         if (missingSkills(season).join() !== gapKey) continue;  // compare like with like
         for (const abbr of Object.keys(DATA.teams[season] || {})) {
           if (mode === "playoffs" && !hasPlayoffs(season, abbr)) continue;
-          out.push(scoreTeam(season, abbr, mode).coverage);
+          coverage.push(scoreTeam(season, abbr, mode).coverage);
+          values.push(teamValues(season, abbr, mode));
         }
       }
-      poolCache.set(key, out.sort((a, b) => a - b));
+      const pool = { coverage: coverage.sort(ascending), skills: ORDER.map((_, i) => values.map((v) => v[i]).sort(ascending)) };
+      pool.depth = values.map((v) => shapeOf(v, pool).depth).sort(ascending);
+      poolCache.set(key, pool);
     }
     return poolCache.get(key);
+  }
+  /* The team shape (the 2D depth outline in 3D): each skill's team value as a percentile among the
+   * pool's team-seasons, placed on the scale; depth is its volume. */
+  function shapeOf(values, pool) {
+    if (!pool.skills[0].length) return null;
+    const pct = values.map((v, i) => RF.pctAgainst(pool.skills[i], v));
+    const r = pct.map((q, i) => RF.radius(q, pool.skills[i].length, S.scale) || 0);
+    return { pct, r, depth: RF.octaVolumeShare(r) };
   }
   const topFive = (season, abbr) => ((DATA.teams[season][abbr] || {}).regular || [])
     .map(([pid]) => entry(season, pid, 1)).filter(complete).slice(0, 5);
@@ -514,15 +541,18 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   readColors();
 
   // model axes: x = first pair, y = second pair (depth), z = third pair (up: perimeter, down: rim)
-  function project(p, W, cam) {
+  const EYE = 5;  // the viewer sits this far in front of the center
+  /* Camera space: x right, y away from the viewer, z up. */
+  function rotate(p, cam) {
     const [x, y, z] = p;
     const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
     const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
-    const x1 = x * cy - y * sy;
     const y1 = x * sy + y * cy;
-    const y2 = y1 * cp - z * sp;
-    const z2 = y1 * sp + z * cp;
-    const f = 5 / (5 + y2);
+    return [x * cy - y * sy, y1 * cp - z * sp, y1 * sp + z * cp];
+  }
+  function project(p, W, cam) {
+    const [x1, y2, z2] = rotate(p, cam);
+    const f = EYE / (EYE + y2);
     const k = W * (cam === GLYPH_CAM ? 0.42 : 0.35);
     return [W / 2 + k * x1 * f, W / 2 - k * z2 * f, y2];
   }
@@ -539,7 +569,44 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
     ctx.setLineDash([]);
   }
 
-  /* Paint shapes. view: [{key, r: six radii, slot: color 0-7 or null, ghost}]. o: {focus, n, small} */
+  /* The team shape on top of the players: a light fill on the faces turned toward you, bold front
+   * edges, thin dashed back edges, in the text color (black on light, white on dark). */
+  function paintOutline(ctx, W, cam, r) {
+    const verts = r.map((v, i) => vertex(i, v));
+    const camv = verts.map((v) => rotate(v, cam));
+    const pts = verts.map((v) => project(v, W, cam));
+    const facing = RF.OCTA_FACES.map(([a, b, c]) => {
+      const [A, B, C] = [camv[a], camv[b], camv[c]];
+      const u = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
+      const w = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
+      const nrm = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];  // outward
+      const view = [A[0], A[1] + EYE, A[2]];  // from the eye to the face
+      return nrm[0] * view[0] + nrm[1] * view[1] + nrm[2] * view[2] < 0;
+    });
+    ctx.fillStyle = colors.ink;
+    RF.OCTA_FACES.forEach((f, k) => {
+      if (!facing[k]) return;
+      ctx.beginPath();
+      ctx.moveTo(pts[f[0]][0], pts[f[0]][1]);
+      ctx.lineTo(pts[f[1]][0], pts[f[1]][1]);
+      ctx.lineTo(pts[f[2]][0], pts[f[2]][1]);
+      ctx.closePath();
+      ctx.globalAlpha = 0.06;
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    for (const [a, b] of EDGES) {
+      const front = RF.OCTA_FACES.some((f, k) => facing[k] && f.includes(a) && f.includes(b));
+      ctx.globalAlpha = front ? 1 : 0.45;
+      line(ctx, pts[a], pts[b], colors.ink, front ? 2.6 : 1.2, front ? [] : [4, 4]);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* Paint shapes. view: [{key, r: six radii, slot: color 0-7 or null, ghost}].
+   * o: {focus, n, small, outline: the team shape's six radii} */
   function paint(ctx, W, cam, view, o) {
     ctx.clearRect(0, 0, W, W);
     const full = RF.AXIS_DIRS.map((d) => project(d, W, cam));
@@ -585,6 +652,7 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
       ctx.globalAlpha = 1;
     }
     if (o.small) return;
+    if (o.outline && o.outline.some((v) => v > 0)) paintOutline(ctx, W, cam, o.outline);
     ctx.font = `600 ${W < 420 ? 12 : 13.5}px ${getComputedStyle(document.body).fontFamily}`;
     ctx.textBaseline = "middle";
     ORDER.forEach((skill, i) => {
@@ -604,8 +672,8 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   const STAGES = [];
   function makeStage(id) {
     const canvas = $(id);
-    const st = { canvas, ctx: canvas.getContext("2d"), view: [], focus: null, n: nOf(LATEST), W: 500 };
-    st.draw = () => paint(st.ctx, st.W, CAM, st.view, { focus: st.focus, n: st.n });
+    const st = { canvas, ctx: canvas.getContext("2d"), view: [], focus: null, n: nOf(LATEST), W: 500, outline: null };
+    st.draw = () => paint(st.ctx, st.W, CAM, st.view, { focus: st.focus, n: st.n, outline: st.outline });
     new ResizeObserver(() => {
       const w = canvas.clientWidth;
       if (!w) return;  // hidden tab
@@ -686,18 +754,22 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   }
 
   /* ---- numbers ---------------------------------------------------------------------------- */
-  function statsHTML(res, pool, poolLabel, shapesNote) {
+  /* cov: {pool, label} to rank coverage against; shape: the team shape (or null), depth ranked
+   * against depthPool; depthNote: shown instead when there's no team shape yet. */
+  function statsHTML(res, cov, shape, depthPool, depthNote) {
     const drawn = res.players.filter((p) => p.drawn).length;
-    const pct = drawn && pool.length ? RF.pctAgainst(pool, res.coverage) : null;
+    const pct = drawn && cov.pool.length ? RF.pctAgainst(cov.pool, res.coverage) : null;
     const note = !drawn ? "no shapes to measure"
-      : pct == null ? "of the full shape" : `of the full shape; better than ${Math.round(pct)}% of ${pool.length} ${poolLabel}`;
+      : pct == null ? `of the full shape, by ${drawn} player${drawn === 1 ? "" : "s"}` : `of the full shape; better than ${Math.round(pct)}% of ${cov.pool.length} ${cov.label}`;
+    const dpct = shape && depthPool && depthPool.length ? RF.pctAgainst(depthPool, shape.depth) : null;
+    const dnote = !shape ? depthNote || "" : dpct == null ? "inside the team shape" : `inside the team shape; better than ${Math.round(dpct)}%`;
     return `<div class="stats">
       <div class="stat hero"><span class="stat-label">Coverage</span><span class="stat-value">${drawn ? share(res.coverage) : "–"}</span><span class="stat-note">${esc(note)}</span></div>
-      <div class="stat"><span class="stat-label">Overlap</span><span class="stat-value">${drawn ? res.overlap.toFixed(2) : "–"}</span><span class="stat-note">shapes' shared volume</span></div>
-      <div class="stat"><span class="stat-label">Shapes</span><span class="stat-value">${drawn}</span><span class="stat-note">${esc(shapesNote)}</span></div></div>`;
+      <div class="stat"><span class="stat-label">Depth</span><span class="stat-value">${shape ? share(shape.depth) : "–"}</span><span class="stat-note">${esc(dnote)}</span></div>
+      <div class="stat"><span class="stat-label">Overlap</span><span class="stat-value">${drawn ? res.overlap.toFixed(2) : "–"}</span><span class="stat-note">shapes' shared volume</span></div></div>`;
   }
 
-  function reachHTML(res, slotOf, gaps, who) {
+  function reachHTML(res, slotOf, gaps, who, shape) {
     const byKey = new Map(res.players.map((p) => [p.key, p]));
     const groups = SK.pairs.map((pair, a) => {
       const rows = pair.map((skill) => {
@@ -706,13 +778,14 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
         const p = b ? byKey.get(b.key) : null;
         const cls = p && slotOf.has(p.key) ? ` c${slotOf.get(p.key) + 1}` : " o";
         return `<div class="bar-row"><div class="lab"><b>${esc(SK.labels[skill])}</b><span>${p ? esc(p.name) : gaps.includes(skill) ? "no data yet" : "nobody"}</span></div>` +
-          `<div class="bar-track"><span class="bar-fill${cls}" style="width:${b ? (b.value * 100).toFixed(1) : 0}%"></span></div>` +
+          `<div class="bar-track"><span class="bar-fill${cls}" style="width:${b ? (b.value * 100).toFixed(1) : 0}%"></span>` +
+          (shape ? `<span class="bar-tick" style="left:${Math.min(shape.r[i] * 100, 99.5).toFixed(1)}%" title="Team shape: ${Math.round(shape.r[i] * 100)}"></span>` : "") + `</div>` +
           `<span class="bar-val">${b ? Math.round(b.value * 100) : "–"}</span></div>`;
       }).join("");
       return `<div class="axis-group"><span class="axis-cap">Axis ${a + 1}</span>${rows}</div>`;
     }).join("");
     return `<div class="card reach"><h3>Reach on each skill</h3>
-      <p>How far toward each end ${esc(who)} best player there gets. The two ends of an axis can stand in for each other.</p>${groups}</div>`;
+      <p>Bars: how far toward each end ${esc(who)} best player there gets.${shape ? " The line across each bar: where the team shape reaches." : ""} The two ends of an axis can stand in for each other.</p>${groups}</div>`;
   }
 
   /* second: {label, value(p) -> html}; label(p) optionally adds to the name */
@@ -772,17 +845,20 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
     }
     const res = scoreTeam(T.season, T.team, T.mode);
     const slots = teamSlots(res, T.season, T.team);
+    const pool = teamPool(T.mode, gaps.join());
+    const shape = shapeOf(teamValues(T.season, T.team, T.mode), pool);
     keepFocus(teamsStage, res);
     teamsStage.view = viewOf(res, slots);
+    teamsStage.outline = shape && $("teams-outline").checked ? shape.r : null;
     teamsStage.n = nOf(T.season);
     $("teams-title").textContent = `${DATA.teams[T.season][T.team].name} ${T.season}`;
-    $("teams-caption").textContent = T.mode === "playoffs" ? `playoff top ${M.rotation_size} by minutes` : "regular season rotation";
-    $("teams-panel").innerHTML = statsHTML(res, teamPool(T.mode, gaps.join()), "team-seasons",
-      T.mode === "playoffs" ? "every rotation player" : `players with ${M.min_minutes_to_draw}+ min`)
-      + reachHTML(res, slots, gaps, "the team's")
+    const drawnCount = res.players.filter((p) => p.drawn).length;
+    $("teams-caption").textContent = `${T.mode === "playoffs" ? `playoff top ${M.rotation_size} by minutes` : "regular season rotation"} · ${drawnCount} shapes`;
+    $("teams-panel").innerHTML = statsHTML(res, { pool: pool.coverage, label: "team-seasons" }, shape, pool.depth)
+      + reachHTML(res, slots, gaps, "the team's", shape)
       + tableHTML(res, slots, teamsStage.focus, { label: "Min", value: (p) => mins(p.min) });
     const ringNote = S.scale === "rank" ? "Dots on each axis mark the top 5, 20 and 50." : "Dots on each axis mark the 25th, 50th and 75th percentiles.";
-    $("teams-hint").textContent = `Drag to turn it. Tap a player to pick out his shape. ${ringNote}`;
+    $("teams-hint").textContent = `Drag to turn it. Tap a player to pick out his shape.${teamsStage.outline ? " The bold outline is the team shape: the whole rotation, weighted by minutes." : ""} ${ringNote}`;
     teamsStage.draw();
     store.set("rf3d-teams", JSON.stringify(T));
   }
@@ -807,13 +883,16 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
     for (const side of ["a", "b"]) {
       const st = C[side];
       const res = scoreTeam(st.season, st.team, C.mode);
+      const pool = teamPool(C.mode, missingSkills(st.season).join());
+      const shape = shapeOf(teamValues(st.season, st.team, C.mode), pool);
       const stage = compareStages[side];
       stage.view = viewOf(res, teamSlots(res, st.season, st.team));
+      stage.outline = shape && $("compare-outline").checked ? shape.r : null;
       stage.n = nOf(st.season);
       stage.draw();
       $(`compare-${side}-title`).textContent = DATA.teams[st.season][st.team].name;
       $(`compare-${side}-caption`).textContent = `${st.season} · ${C.mode === "playoffs" ? `playoff top ${M.rotation_size}` : "regular season"}`;
-      out[side] = { res, pool: teamPool(C.mode, missingSkills(st.season).join()) };
+      out[side] = { res, pool, shape };
     }
     const A = `${C.a.team} ${yy(C.a.season)}`;
     const B = `${C.b.team} ${yy(C.b.season)}`;
@@ -822,32 +901,31 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
       const [la, lb] = lead(va, vb, higher);
       return `<tr><th scope="row">${esc(name)}</th><td class="${la}">${f(va)}</td><td class="${lb}">${f(vb)}</td></tr>`;
     };
-    const rank = (side) => RF.pctAgainst(out[side].pool, out[side].res.coverage);
-    const drawnOf = (side) => out[side].res.players.filter((p) => p.drawn).length;
+    const pctFmt = (v) => (v == null ? "–" : `${Math.round(v)}%`);
+    const rank = (side) => RF.pctAgainst(out[side].pool.coverage, out[side].res.coverage);
+    const depthOf = (side) => (out[side].shape ? out[side].shape.depth : null);
+    const depthRank = (side) => (out[side].shape ? RF.pctAgainst(out[side].pool.depth, out[side].shape.depth) : null);
     const rows = [
       row("Coverage", out.a.res.coverage, out.b.res.coverage, share, true),
-      row("Better than (team-seasons)", rank("a"), rank("b"), (v) => (v == null ? "–" : `${Math.round(v)}%`), true),
+      row("Coverage: better than", rank("a"), rank("b"), pctFmt, true),
+      row("Depth (team shape)", depthOf("a"), depthOf("b"), (v) => (v == null ? "–" : share(v)), true),
+      row("Depth: better than", depthRank("a"), depthRank("b"), pctFmt, true),
       row("Overlap", out.a.res.overlap, out.b.res.overlap, (v) => v.toFixed(2), null),
-      row("Shapes", drawnOf("a"), drawnOf("b"), String, null),
     ].join("");
-    const nameAt = (side, i) => {
-      const b = out[side].res.best[i];
-      const p = b ? out[side].res.players.find((q) => q.key === b.key) : null;
-      return p ? p.name.split(" ").slice(-1)[0] : "–";
-    };
+    const teamPct = (side, i) => (out[side].shape ? out[side].shape.pct[i] || 0 : 0);
     const dumbs = ORDER.map((skill, i) => {
-      const va = out.a.res.best[i] ? out.a.res.best[i].value * 100 : 0;
-      const vb = out.b.res.best[i] ? out.b.res.best[i].value * 100 : 0;
-      return `<div><div class="dumb-head"><b>${esc(SK.labels[skill])}</b><span>${esc(nameAt("a", i))} ${fmt(va)} · ${esc(nameAt("b", i))} ${fmt(vb)}</span></div>
+      const va = teamPct("a", i);
+      const vb = teamPct("b", i);
+      return `<div><div class="dumb-head"><b>${esc(SK.labels[skill])}</b><span>${esc(A)} ${fmt(va)} · ${esc(B)} ${fmt(vb)}</span></div>
         <div class="dumb-track"><span class="dumb-span" style="left:${Math.min(va, vb)}%;width:${Math.abs(va - vb)}%"></span>
         <span class="dumb-dot b" style="left:${vb}%"></span><span class="dumb-dot" style="left:${va}%"></span></div></div>`;
     }).join("");
     $("compare-versus").innerHTML = `
       <div class="table-wrap"><table><thead><tr><th scope="col"></th><th scope="col">${esc(A)}</th><th scope="col">${esc(B)}</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="card"><div class="chart-title"><h2 style="font-size:20px">Reach on each skill</h2>
+      <div class="card"><div class="chart-title"><h2 style="font-size:20px">Team shape by skill</h2>
         <span class="legend-ab"><span><i class="a"></i>${esc(A)}</span><span><i></i>${esc(B)}</span></span></div>
         <div class="dumbbells">${dumbs}</div>
-        <p class="muted" style="margin:10px 0 0;font-size:13px">How far toward each end the team's best player there gets, 0 to 100 left to right.</p></div>`;
+        <p class="muted" style="margin:10px 0 0;font-size:13px">The whole rotation's skill, weighted by minutes, as a percentile among ${out.a.pool.coverage.length} team-seasons; 0 to 100 left to right.</p></div>`;
     store.set("rf3d-compare", JSON.stringify(C));
   }
 
@@ -880,13 +958,16 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
     $("builder-slots").innerHTML = items.join("");
     const res = scoreLineup(picks);
     const slots = new Map(res.players.map((p, i) => [p.key, i]));
+    const tpool = teamPool("regular", missingSkills(LATEST).join());
+    const shape = picks.length ? shapeOf(lineupValues(picks), tpool) : null;
     keepFocus(builderStage, res);
     builderStage.view = viewOf(res, slots);
+    builderStage.outline = shape ? shape.r : null;
     builderStage.draw();
     $("builder-caption").textContent = `${picks.length} of 5 picked`;
     const pool = picks.length === 5 ? fivesPool() : [];
-    $("builder-panel").innerHTML = statsHTML(res, pool, "real starting fives", "full size: equal minutes")
-      + reachHTML(res, slots, [], "your lineup's")
+    $("builder-panel").innerHTML = statsHTML(res, { pool, label: "real starting fives" }, shape, tpool.depth, "pick a player")
+      + reachHTML(res, slots, [], "your lineup's", shape)
       + tableHTML(res, slots, builderStage.focus, { label: "Season", value: (p) => esc(p.season) });
     store.set("rf3d-lineup", JSON.stringify(lineup));
     renderResults();
@@ -1080,14 +1161,17 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
     drawGlyphs();
 
     const slots = new Map(res.players.map((p, i) => [p.key, i]));
+    const tpool = teamPool("regular", missingSkills(GAME.stats_season).join());
+    const shape = G.done ? shapeOf(lineupValues(picks), tpool) : null;  // like the 2D game: once all five are in
     keepFocus(gameStage, res);
     gameStage.view = viewOf(res, slots);
+    gameStage.outline = shape ? shape.r : null;
     gameStage.draw();
     $("game-caption").textContent = `${G.picks.length} of ${SPOTS} signed`;
     const salaryOf = new Map(G.picks.map((p) => [`${p.pid}|${GAME.stats_season}`, p.salary]));
     const posOf = new Map(G.picks.map((p) => [`${p.pid}|${GAME.stats_season}`, BY_POS ? p.pos : null]));
-    $("game-panel").innerHTML = statsHTML(res, G.done ? fivesPool() : [], "real starting fives", "your signings")
-      + (G.picks.length ? reachHTML(res, slots, [], "your")
+    $("game-panel").innerHTML = statsHTML(res, { pool: G.done ? fivesPool() : [], label: "real starting fives" }, shape, tpool.depth, "the team shape shows once all five are signed")
+      + (G.picks.length ? reachHTML(res, slots, [], "your", shape)
         + tableHTML(res, slots, gameStage.focus, { label: "Salary", value: (p) => money(salaryOf.get(p.key)) },
           (p) => (posOf.get(p.key) ? `<span class="pos">${esc(posOf.get(p.key))}</span>` : "")) : "");
     store.set("rf3d-game", JSON.stringify(G));
@@ -1169,6 +1253,8 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   $("teams-team").addEventListener("change", (e) => { T.team = e.target.value; teamsStage.focus = null; renderTeams(); });
   $("teams-mode-regular").addEventListener("click", () => { T.mode = "regular"; renderTeams(); });
   $("teams-mode-playoffs").addEventListener("click", () => { T.mode = "playoffs"; renderTeams(); });
+  $("teams-outline").addEventListener("change", renderTeams);
+  $("compare-outline").addEventListener("change", renderCompare);
   for (const side of ["a", "b"]) {
     $(`compare-${side}-season`).addEventListener("change", (e) => { C[side].season = e.target.value; renderCompare(); });
     $(`compare-${side}-team`).addEventListener("change", (e) => { C[side].team = e.target.value; renderCompare(); });
@@ -1218,8 +1304,9 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
       ["Shape size", `Set by overall impact (${SOURCES.map((x) => x.name).join(" + ") || "plus-minus"}, offense plus defense) as a league percentile. The lowest-impact player's shape is ${Math.round(SK.size_floor * 100)}% as wide as the best's. On a team, volume also follows minutes played.`],
       ["Scale", `Percentile (the default here) puts each vertex at the player's percentile. Rank uses distance by rank: the best player reaches the end, and every halving of the rank moves the same step outward, so the top few stand out. In 3D that shrink is cubed, so on Rank only real standouts have visible volume.${S.scale === "rank" ? " (Showing now: Rank.)" : ""}`],
       ["Coverage", "Share of the full shape the players fill together: does someone on the team reach each direction? Teams are ranked against every team-season with the same rotation and scale."],
+      ["Team shape and depth", "The bold outline, in the text color: how much of each skill the whole rotation provides. Each player's skill becomes a rank-based score (below average counts 0, since a player who can't do something doesn't take it away), weighted by minutes so the weights add to 5, and the team's total is ranked against every team-season. Depth is the share of the full shape inside it. Same rules as the 2D depth outline."],
       ["Overlap", "Total volume of the shapes minus the volume they fill together, in full shapes. Big overlap means players doing the same jobs."],
-      ["Builder and cap game", "Five starters with equal minutes, so each shape's size comes from impact alone. Their coverage is ranked against every real team's top five by regular-season minutes."],
+      ["Builder and cap game", "Five starters with equal minutes, so each shape's size comes from impact alone. Their coverage is ranked against every real team's top five by regular-season minutes; their team shape (each player weighted 1, so the weights add to 5 like a team's) against every team-season."],
       ["Prototype", "Skills are regular-season numbers, in the playoff view too. A player needs all six skills to get a shape."],
     ];
     $("glossary").innerHTML = gloss.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("");
