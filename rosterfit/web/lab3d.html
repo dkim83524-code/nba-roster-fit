@@ -14,7 +14,7 @@
   --surface-2: #f6f8f5;
   --ink: #14211b;
   --ink-2: #4b5953;
-  --muted: #76847e;
+  --muted: #5e6c66;
   --line: #d6ddd9;
   --grid: #e2e8e4;
   --axis: #bcc6c1;
@@ -91,6 +91,11 @@ select, input[type="search"] { background: var(--surface); border: 1px solid var
 .check { display: inline-flex; align-items: center; gap: 6px; padding-bottom: 8px; color: var(--ink-2); cursor: pointer; }
 .check input { accent-color: var(--accent); }
 .muted { color: var(--muted); }
+
+@media (pointer: coarse) {
+  .tab, .seg-btn, .btn, select, input[type="search"], .check { min-height: 44px; }
+  .slot .x { min-width: 40px; min-height: 40px; }
+}
 
 /* stage + panel */
 .split { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); gap: 20px; align-items: start; }
@@ -368,7 +373,7 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
           <ol class="slots" id="builder-slots"></ol>
         </div>
         <label class="field"><span>Add a player</span>
-          <input type="search" id="builder-search" placeholder="Search a name, e.g. Brunson" autocomplete="off" spellcheck="false">
+          <input type="search" id="builder-search" placeholder="Name, e.g. Brunson or Curry 2021" autocomplete="off" spellcheck="false">
         </label>
         <ul class="results" id="builder-results" aria-live="polite"></ul>
         <div class="row">
@@ -474,8 +479,9 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   const seasonItems = () => SEASONS.slice().reverse().map((s) => [s, s]);
   const teamItems = (season) => teamsIn(season).map((t) => [t.abbr, t.name === t.abbr ? t.abbr : `${t.name} (${t.abbr})`]);
   function fillSelect(sel, items, value) {
-    sel.replaceChildren(...items.map(([v, label]) => new Option(label, v)));
-    if (value != null && items.some(([v]) => v === value)) sel.value = value;
+    const same = sel.options.length === items.length && items.every(([v], i) => sel.options[i].value === v);
+    if (!same) sel.replaceChildren(...items.map(([v, label]) => new Option(label, v)));  // unchanged: leave it, it may be open
+    if (value != null && sel.value !== value && items.some(([v]) => v === value)) sel.value = value;
   }
   function defaultTeam(season, prefer) {
     const list = teamsIn(season).map((t) => t.abbr);
@@ -497,17 +503,17 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   const complete = (e) => !!e.pct && e.pct.every((v) => v != null) && e.impact != null;
 
   /* A team's rotation: shape volume follows minutes. */
-  function scoreTeam(season, abbr, mode) {
+  function scoreTeam(season, abbr, mode, scale) {
     const team = DATA.teams[season] && DATA.teams[season][abbr];
     const pairs = team ? team[mode] || [] : [];
     return RF.evaluate3d(pairs.map(([pid, min]) => entry(season, pid, min)), {
-      scale: S.scale, n: nOf(season), sizeFloor: SK.size_floor, minutes: true,
+      scale: scale || S.scale, n: nOf(season), sizeFloor: SK.size_floor, minutes: true,
       minMinutes: mode === "playoffs" ? null : M.min_minutes_to_draw, dirs: DIRS });
   }
   /* Five starters at full size: equal minutes, so a shape's size comes from impact alone. */
-  function scoreLineup(list) {
+  function scoreLineup(list, scale) {
     return RF.evaluate3d(list.map((p) => entry(p.season, p.pid, 1)), {
-      scale: S.scale, n: nOf(LATEST), sizeFloor: SK.size_floor, minutes: false, minMinutes: null, dirs: DIRS });
+      scale: scale || S.scale, n: nOf(LATEST), sizeFloor: SK.size_floor, minutes: false, minMinutes: null, dirs: DIRS });
   }
 
   /* A rotation's six team values (minutes-weighted, below average counting 0: RF.teamSkillValues). */
@@ -518,25 +524,50 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   }
   const lineupValues = (list) => RF.teamSkillValues(list.map((p) => entry(p.season, p.pid, 1)), { fixedWeight: 1 });
 
-  /* What to rank against: every team-season's rotation (coverage, the six team values, depth), or
-   * every team's real top five by minutes (coverage). */
+  /* Work that can wait until after the first paint, done a slice at a time so the page stays
+   * responsive: later(items, each, done) runs each(item) for every item, then done(). */
+  const jobs = [];
+  let pumping = false;
+  function pump() {
+    const until = performance.now() + 14;
+    while (jobs.length && performance.now() < until) {
+      const job = jobs[0];
+      if (job.i < job.items.length) job.each(job.items[job.i++]);
+      else { jobs.shift(); job.done(); }
+    }
+    if (jobs.length) setTimeout(pump, 0);
+    else pumping = false;
+  }
+  function later(items, each, done) {
+    jobs.push({ items, i: 0, each, done });
+    if (!pumping) { pumping = true; setTimeout(pump, 0); }
+  }
+  let refresh = () => {};  // re-renders the numbers when a ranking is ready; set once the views exist
+
+  /* What to rank against: every team-season's rotation (the six team values, depth, coverage), or
+   * every team's real top five by minutes (coverage). The team values and depth are cheap and built
+   * at once, since the team shape needs them. Coverage needs a union volume per team-season
+   * (seconds on a phone), so it's filled in later: `coverage` is empty and `ready` false until then. */
   const poolCache = new Map();
   const ascending = (a, b) => a - b;
   function teamPool(mode, gapKey) {
     const key = `team|${mode}|${S.scale}|${gapKey}`;
     if (!poolCache.has(key)) {
-      const coverage = [];
-      const values = [];
+      const scale = S.scale;
+      const list = [];
       for (const season of M.pool_seasons || []) {
         if (missingSkills(season).join() !== gapKey) continue;  // compare like with like
         for (const abbr of Object.keys(DATA.teams[season] || {})) {
           if (mode === "playoffs" && !hasPlayoffs(season, abbr)) continue;
-          coverage.push(scoreTeam(season, abbr, mode).coverage);
-          values.push(teamValues(season, abbr, mode));
+          list.push([season, abbr]);
         }
       }
-      const pool = { coverage: coverage.sort(ascending), skills: ORDER.map((_, i) => values.map((v) => v[i]).sort(ascending)) };
+      const values = list.map(([season, abbr]) => teamValues(season, abbr, mode));
+      const pool = { size: list.length, coverage: [], ready: !list.length, skills: ORDER.map((_, i) => values.map((v) => v[i]).sort(ascending)) };
       pool.depth = values.map((v) => shapeOf(v, pool).depth).sort(ascending);
+      const coverage = [];
+      later(list, ([season, abbr]) => coverage.push(scoreTeam(season, abbr, mode, scale).coverage),
+        () => { pool.coverage = coverage.sort(ascending); pool.ready = true; refresh(); });
       poolCache.set(key, pool);
     }
     return poolCache.get(key);
@@ -554,18 +585,24 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   function fivesPool() {
     const key = `fives|${S.scale}`;
     if (!poolCache.has(key)) {
-      const out = [];
+      const scale = S.scale;
+      const list = [];
       for (const season of M.pool_seasons || []) {
         if (missingSkills(season).length) continue;
         for (const abbr of Object.keys(DATA.teams[season] || {})) {
           const five = topFive(season, abbr);
-          if (five.length === 5) out.push(scoreLineup(five).coverage);
+          if (five.length === 5) list.push(five);
         }
       }
-      poolCache.set(key, out.sort((a, b) => a - b));
+      const pool = { size: list.length, coverage: [], ready: !list.length };
+      const coverage = [];
+      later(list, (five) => coverage.push(scoreLineup(five, scale).coverage),
+        () => { pool.coverage = coverage.sort(ascending); pool.ready = true; refresh(); });
+      poolCache.set(key, pool);
     }
     return poolCache.get(key);
   }
+  const NO_POOL = { size: 0, coverage: [], ready: true };
 
   /* ---- drawing ---------------------------------------------------------------------------- */
   // one camera for every stage: turning one turns them all
@@ -712,7 +749,7 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   const STAGES = [];
   function makeStage(id) {
     const canvas = $(id);
-    const st = { canvas, ctx: canvas.getContext("2d"), view: [], focus: null, hover: null, n: nOf(LATEST), W: 500, outline: null };
+    const st = { canvas, ctx: canvas.getContext("2d"), view: [], focus: null, hover: null, n: nOf(LATEST), W: 500, outline: null, onScreen: true };
     st.draw = () => paint(st.ctx, st.W, CAM, st.view, { focus: st.hover != null ? st.hover : st.focus, n: st.n, outline: st.outline });
     new ResizeObserver(() => {
       const w = canvas.clientWidth;
@@ -724,17 +761,27 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
       st.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       st.draw();
     }).observe(canvas);
-    // drag to turn; horizontal drags on phones, so the page still scrolls
+    if ("IntersectionObserver" in window) {  // a spinning shape nobody can see isn't redrawn
+      new IntersectionObserver(([e]) => { st.onScreen = e.isIntersecting; if (st.onScreen) st.draw(); }).observe(canvas);
+    }
+    // Drag to turn. A mouse turns it both ways at once. A finger only counts once it's clearly
+    // moving sideways, and then only turns it sideways: an up-and-down swipe is the page scrolling
+    // past, and must not nudge the view or stop the spin.
     let drag = null;
+    const grab = (e) => { drag.turning = true; canvas.setPointerCapture(e.pointerId); canvas.classList.add("dragging"); setSpin(false); };
     canvas.addEventListener("pointerdown", (e) => {
-      drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
-      canvas.setPointerCapture(e.pointerId);
-      canvas.classList.add("dragging");
-      setSpin(false);
+      drag = { x: e.clientX, y: e.clientY, id: e.pointerId, touch: e.pointerType === "touch", turning: false };
+      if (!drag.touch) grab(e);
     });
     canvas.addEventListener("pointermove", (e) => {
       if (!drag || e.pointerId !== drag.id) return;
-      turn((e.clientX - drag.x) * 0.01, (e.clientY - drag.y) * 0.01);
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (!drag.turning) {
+        if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return;
+        grab(e);
+      }
+      turn(dx * 0.01, drag.touch ? 0 : dy * 0.01);
       drag.x = e.clientX;
       drag.y = e.clientY;
     });
@@ -752,7 +799,7 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
     STAGES.push(st);
     return st;
   }
-  const drawAll = () => { for (const st of STAGES) if (st.canvas.offsetParent !== null) st.draw(); };
+  const drawAll = () => { for (const st of STAGES) if (st.onScreen && st.canvas.offsetParent !== null) st.draw(); };
   function turn(dyaw, dpitch) {
     CAM.yaw += dyaw;
     CAM.pitch = Math.min(1.45, Math.max(-1.45, CAM.pitch + dpitch));
@@ -794,13 +841,16 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   }
 
   /* ---- numbers ---------------------------------------------------------------------------- */
-  /* cov: {pool, label} to rank coverage against; shape: the team shape (or null), depth ranked
-   * against depthPool; depthNote: shown instead when there's no team shape yet. */
+  /* cov: {pool: a ranking pool, label} to rank coverage against; shape: the team shape (or null),
+   * depth ranked against depthPool; depthNote: shown instead when there's no team shape yet. */
   function statsHTML(res, cov, shape, depthPool, depthNote) {
     const drawn = res.players.filter((p) => p.drawn).length;
-    const pct = drawn && cov.pool.length ? RF.pctAgainst(cov.pool, res.coverage) : null;
+    const ranks = cov.pool.coverage;
+    const pct = drawn && ranks.length ? RF.pctAgainst(ranks, res.coverage) : null;
     const note = !drawn ? "no shapes to measure"
-      : pct == null ? `of the full shape, by ${drawn} player${drawn === 1 ? "" : "s"}` : `of the full shape; better than ${Math.round(pct)}% of ${cov.pool.length} ${cov.label}`;
+      : pct != null ? `of the full shape; better than ${Math.round(pct)}% of ${ranks.length} ${cov.label}`
+        : !cov.pool.ready ? `of the full shape; ranking against ${cov.pool.size} ${cov.label}…`
+          : `of the full shape, by ${drawn} player${drawn === 1 ? "" : "s"}`;
     const dpct = shape && depthPool && depthPool.length ? RF.pctAgainst(depthPool, shape.depth) : null;
     const dnote = !shape ? depthNote || "" : dpct == null ? "inside the team shape" : `inside the team shape; better than ${Math.round(dpct)}%`;
     return `<div class="stats">
@@ -890,16 +940,20 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   function makeList(id, stage, opts) {
     const el = $(id);
     const L = { res: { players: [] }, slots: new Map(), opts };
-    L.render = () => { el.innerHTML = playerListHTML(L.res, L.slots, stage.focus, L.opts); };
+    L.render = () => {
+      const row = el.contains(document.activeElement) ? document.activeElement.closest(".prow") : null;
+      el.innerHTML = playerListHTML(L.res, L.slots, stage.focus, L.opts);
+      const again = row ? el.querySelector(`.prow[data-key="${CSS.escape(row.dataset.key)}"] .prow-btn`) : null;
+      if (again) again.focus({ preventScroll: true });  // a re-render doesn't drop the keyboard's place
+    };
     L.set = (res, slots) => { L.res = res; L.slots = slots; L.render(); };
     el.addEventListener("click", (e) => {
       const btn = e.target.closest(".prow-btn");
       if (!btn) return;
       const key = btn.parentElement.dataset.key;
       stage.focus = stage.focus === key ? null : key;
+      btn.focus({ preventScroll: true });  // Safari doesn't focus a clicked button; render() keeps it
       L.render();
-      const again = el.querySelector(`.prow[data-key="${CSS.escape(key)}"] .prow-btn`);
-      if (again) again.focus({ preventScroll: true });
       stage.draw();
     });
     el.addEventListener("pointerover", (e) => {
@@ -947,7 +1001,7 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
     $("teams-title").textContent = `${DATA.teams[T.season][T.team].name} ${T.season}`;
     const drawnCount = res.players.filter((p) => p.drawn).length;
     $("teams-caption").textContent = `${T.mode === "playoffs" ? `playoff top ${M.rotation_size} by minutes` : "regular season rotation"} · ${drawnCount} shapes`;
-    $("teams-panel").innerHTML = statsHTML(res, { pool: pool.coverage, label: "team-seasons" }, shape, pool.depth)
+    $("teams-panel").innerHTML = statsHTML(res, { pool, label: "team-seasons" }, shape, pool.depth)
       + reachHTML(res, slots, gaps, "the team's", shape);
     teamsList.opts.title = T.mode === "playoffs" ? `Playoff top ${M.rotation_size}` : "Players";
     teamsList.set(res, slots);
@@ -989,13 +1043,13 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
     }
     const A = `${C.a.team} ${yy(C.a.season)}`;
     const B = `${C.b.team} ${yy(C.b.season)}`;
-    const lead = (va, vb, higher) => (higher == null || va === vb ? ["", ""] : (va > vb) === higher ? ["lead", ""] : ["", "lead"]);
+    const lead = (va, vb, higher) => (higher == null || va === vb || typeof va !== "number" || typeof vb !== "number" ? ["", ""] : (va > vb) === higher ? ["lead", ""] : ["", "lead"]);
     const row = (name, va, vb, f, higher) => {
       const [la, lb] = lead(va, vb, higher);
       return `<tr><th scope="row">${esc(name)}</th><td class="${la}">${f(va)}</td><td class="${lb}">${f(vb)}</td></tr>`;
     };
-    const pctFmt = (v) => (v == null ? "–" : `${Math.round(v)}%`);
-    const rank = (side) => RF.pctAgainst(out[side].pool.coverage, out[side].res.coverage);
+    const pctFmt = (v) => (v == null ? "–" : v === "…" ? v : `${Math.round(v)}%`);
+    const rank = (side) => (out[side].pool.ready ? RF.pctAgainst(out[side].pool.coverage, out[side].res.coverage) : "…");
     const depthOf = (side) => (out[side].shape ? out[side].shape.depth : null);
     const depthRank = (side) => (out[side].shape ? RF.pctAgainst(out[side].pool.depth, out[side].shape.depth) : null);
     const rows = [
@@ -1018,7 +1072,7 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
       <div class="card"><div class="chart-title"><h2 style="font-size:20px">Team shape by skill</h2>
         <span class="legend-ab"><span><i class="a"></i>${esc(A)}</span><span><i></i>${esc(B)}</span></span></div>
         <div class="dumbbells">${dumbs}</div>
-        <p class="muted" style="margin:10px 0 0;font-size:13px">The whole rotation's skill, weighted by minutes, as a percentile among ${out.a.pool.coverage.length} team-seasons; 0 to 100 left to right.</p></div>`;
+        <p class="muted" style="margin:10px 0 0;font-size:13px">The whole rotation's skill, weighted by minutes, as a percentile among ${out.a.pool.size} team-seasons; 0 to 100 left to right.</p></div>`;
     store.set("rf3d-compare", JSON.stringify(C));
   }
 
@@ -1027,7 +1081,7 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   for (const s of SEASONS) {
     for (const p of INDEX[s].values()) {
       const e = entry(s, p.pid, p.min);
-      if (p.min >= 200 && complete(e)) SEARCH.push({ ...e, key2: norm(p.name) });
+      if (p.min >= 200 && complete(e)) SEARCH.push({ ...e, key2: norm(`${p.name} ${s} ${p.team}`) });  // "curry 2021", "brunson nyk"
     }
   }
   let lineup = [];  // keys "pid|season"
@@ -1059,8 +1113,8 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
     builderStage.outline = shape ? shape.r : null;
     builderStage.draw();
     $("builder-caption").textContent = `${picks.length} of 5 picked`;
-    const pool = picks.length === 5 ? fivesPool() : [];
-    $("builder-panel").innerHTML = statsHTML(res, { pool, label: "real starting fives" }, shape, tpool.depth, "pick a player")
+    const pool = picks.length === 5 ? fivesPool() : NO_POOL;
+    $("builder-panel").innerHTML = statsHTML(res, { pool, label: "real teams' top fives" }, shape, tpool.depth, "pick a player")
       + reachHTML(res, slots, [], "your lineup's", shape);
     builderList.set(res, slots);
     store.set("rf3d-lineup", JSON.stringify(lineup));
@@ -1247,10 +1301,10 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
       const bestLine = G.mode === "daily"
         ? (best.daily && best.daily.date === G.date ? `Your best today on this scale: ${(best.daily.score * 100).toFixed(1)}%.` : "")
         : (best.free != null ? `Your best in free play on this scale: ${(best.free * 100).toFixed(1)}%.` : "");
-      const pct = RF.pctAgainst(fivesPool(), res.coverage);
+      const pct = RF.pctAgainst(fivesPool().coverage, res.coverage);
       html += `<div class="card"><span class="stat-label">${G.mode === "daily" ? `Daily deal · ${esc(G.date)}` : "Free play"} · final</span>
         <div class="final">${(res.coverage * 100).toFixed(1)}%</div>
-        <p style="margin:2px 0 8px">of the full shape on the ${esc(S.scale)} scale${pct != null ? `, better than ${Math.round(pct)}% of real starting fives` : ""}, with ${money(spent())} of the ${money(GAME.cap, 2)} cap. ${esc(bestLine)}</p>
+        <p style="margin:2px 0 8px">of the full shape on the ${esc(S.scale)} scale${pct != null ? `, better than ${Math.round(pct)}% of real teams' top fives` : ""}, with ${money(spent())} of the ${money(GAME.cap, 2)} cap. ${esc(bestLine)}</p>
         <div class="row"><button class="btn primary" id="game-copy">Copy result</button><button class="btn" id="game-again">Play again</button></div>
         <textarea class="share-text" id="game-share" readonly hidden></textarea></div>`;
     }
@@ -1269,7 +1323,7 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
     gameInfo.salary = new Map(G.picks.map((p) => [`${p.pid}|${GAME.stats_season}`, p.salary]));
     gameInfo.pos = new Map(G.picks.map((p) => [`${p.pid}|${GAME.stats_season}`, BY_POS ? p.pos : null]));
     gameList.set(res, slots);
-    $("game-panel").innerHTML = statsHTML(res, { pool: G.done ? fivesPool() : [], label: "real starting fives" }, shape, tpool.depth, "the team shape shows once all five are signed")
+    $("game-panel").innerHTML = statsHTML(res, { pool: G.done ? fivesPool() : NO_POOL, label: "real teams' top fives" }, shape, tpool.depth, "the team shape shows once all five are signed")
       + (G.picks.length ? reachHTML(res, slots, [], "your", shape) : "");
     store.set("rf3d-game", JSON.stringify(G));
   }
@@ -1452,6 +1506,12 @@ canvas.glyph { display: block; width: 48px; height: 48px; }
   renderCompare();
   renderBuilder();
   if (VIEWS.includes("game")) { restoreGame(); renderGame(); }
+  refresh = () => {  // a ranking just finished: show it wherever it's used
+    renderTeams();
+    renderCompare();
+    renderBuilder();
+    if (VIEWS.includes("game") && G && G.done) renderGame();
+  };
   syncSpinButtons();
   const fromHash = location.hash.replace("#", "");
   show(VIEWS.includes(fromHash) ? fromHash : store.get("rf3d-view") || "teams");
